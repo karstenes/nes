@@ -65,7 +65,12 @@ struct PPU {
 
     oamaddr: usize,
 
-    scrollstate: bool,
+
+    // regs
+    v: u16,
+    t: u16,
+    x: u8,
+    w: bool,
 }
 
 impl PPU {

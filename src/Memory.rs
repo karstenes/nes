@@ -36,6 +36,7 @@ impl Memory {
 pub fn readPPU(ppu: &PPU, index: usize) -> u8 {
     match index {
         0x2002 => {
+            ppu.w = false;
             0
         },
         _ => {
@@ -54,6 +55,8 @@ pub fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             ppu.sprite_height = (data & 0b00100000) > 0;
             ppu.master_slave = (data & 0b01000000) > 0;
             ppu.nmi_enable = (data & 0b10000000) > 0;
+
+            ppu.t = (ppu.t & 0xF3FF) | (((data & 0b00000011) as u16) << 10);
         },
         0x2001 => {
             ppu.grayscale = (data & 0b00000001) > 0;
@@ -73,17 +76,34 @@ pub fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             ppu.oamaddr += 1;
         },
         0x2005 => {
-            if !ppu.scrollstate {
-                
-
-                ppu.scrollstate = true;
+            if !ppu.w {
+                ppu.t = (ppu.t & 0xFFE0) | (data as u16 >> 3);
+                ppu.x = data & 0b00000111;
+                ppu.w = true;
             } else {
-
-
-                ppu.scrollstate = false;
+                ppu.t = (ppu.t & 0xF3E0) | (((data & 0b00000111) as u16) << 13);
+                ppu.t = (ppu.t & 0xFC1F) | (((data & 0b11111000) as u16) << 5);
+                ppu.w = false;
             }
+        },
+        0x2006 => {
+            if !ppu.w {
+                ppu.t = (ppu.t & 0x80FF) | (((data & 0b00111111) as u16) << 8);
+                ppu.w = true;
+            } else {
+                ppu.t = (ppu.t & 0xFF00) | (data as u16);
+                ppu.v = ppu.t;
+                ppu.w = false;
+            }
+        },
+        0x2007 => {
+            if ppu.increment {
+                ppu.t += 32;
+            } else {
+                ppu.t += 1;
+            }
+            unimplemented!();
         }
-
     }
 }
 
