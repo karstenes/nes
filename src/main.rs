@@ -6,7 +6,8 @@
 /// 
 /// 
 
-mod Memory;
+mod memory;
+mod opcodes;
 
 #[allow(non_snake_case)]
 pub struct CPU {
@@ -27,7 +28,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    fn new () -> Self {
+    fn new() -> Self {
         CPU {
             A: 0, X: 0, Y: 0, PC: 0, SP: 0, carry: false, zero: false, interupt_disable: false, decimal: false, break_cmd: false, overflow: false,  negative: false, interupt: false, pause: 0
         }
@@ -74,10 +75,8 @@ struct PPU {
 }
 
 impl PPU {
-    fn new () -> Self {
-        PPU {
-
-        }
+    fn new() -> Self {
+        unimplemented!();
     }
 }
 
@@ -86,19 +85,19 @@ struct APU {
 }
 
 impl APU {
-    fn new () -> Self {
+    fn new() -> Self {
         APU {}
     }
 }
 
-struct Console {
+pub struct Console {
     CPU: CPU,
     PPU: PPU,
     APU: APU,
-    Memory: Memory::Memory
+    Memory: memory::Memory
 }
 
 fn main() {
-    let mut console = Console {CPU: CPU::new(), PPU: PPU::new(), APU: APU::new(), Memory: Memory::Memory::new()};
+    let mut console = Console {CPU: CPU::new(), PPU: PPU::new(), APU: APU::new(), Memory: memory::Memory::new()};
         
 }
