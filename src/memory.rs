@@ -154,4 +154,3 @@ fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
         }
     }
 }
-
