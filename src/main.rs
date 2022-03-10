@@ -34,6 +34,26 @@ impl CPU {
         }
     }
 }
+struct Opcode {
+    code: u8,
+    cycle_count: usize,
+    address_mode: u8, 
+    /*
+    0 = accumulator
+    1 = immed
+    2 = implied
+    3 = relative
+    4 = absolute
+    5 = zero page
+    6 = indirect
+    7 = absolute indexed x
+    8 = absolute indexed y
+    9 = zero page indexed x
+    10 = zero page indexed y
+    11 = indexed indirect
+    12 = indirect indexed
+    */
+}
 
 struct PPU {
     palette: Vec<u8>,

@@ -32,7 +32,7 @@ impl Memory {
         }
     }
 
-    pub fn write(self, console: &mut Console, index: usize) {
+    pub fn write(self, console: &mut Console, index: usize, data: u8) {
         match index {
 
             _ => {
