@@ -1,7 +1,5 @@
 use super::*;
 
-
-
 fn pop(console: &mut Console) -> u8 {
     0
 }
@@ -21,23 +19,63 @@ pub fn interpret_opcode(console: &mut Console, opcode: Opcode) {
     6 = indirect
     7 = absolute indexed x
     8 = absolute indexed y
-    9 = zero page indexed
-    10 = indexed indirect
-    11 = indirect indexed */
+    9 = zero page indexed x
+    10 = zero page indexed y
+    11 = indexed indirect
+    12 = indirect indexed */
 
     let cpu = &mut console.CPU;
     let mem = &console.Memory;
+    let pc = cpu.PC;
 
+    let addr = match opcode.address_mode {
+        0 => 0,
+
+        1 => pc+1,
+
+        2 => 0,
+
+        3 => {
+            match mem.read(console, pc+1) {
+                x if x < 128 => {
+                    pc+2+(x as u16)
+                }
+                x => {
+                    pc+2-(!((x as u16 | 0xFF00)-1))
+                }
+            }
+        },
+
+        4 => mem.read16(console, pc+1),
+
+        5 => mem.read(console, pc+1) as u16,
+
+        6 => mem.read16(console,mem.read16(console, pc+1)),
+
+        7 => mem.read16(console, pc+1) + (cpu.X as u16),
+
+        8 => mem.read16(console, pc+1) + (cpu.Y as u16),
+
+        9 => ((mem.read(console, pc+1) + cpu.X) as u16) % 0xFF,
+
+        10 => ((mem.read(console, pc+1) + cpu.X) as u16) % 0xFF,
+
+        11 => mem.read16(console, mem.read16(console, pc+1+(cpu.X as u16)))
+
+        12 => mem.read16(console, mem.read16(console, pc+1)) + (cpu.Y as u16)
+    };
+
+   
     
 
     let push = |data: u8| {
-        mem.write(console, cpu.SP as usize, data);
+        mem.write(console, cpu.SP as u16, data);
         cpu.SP -= 1;
     };
 
-    let pull= || {
+    let pull = || {
         cpu.SP += 1;
-        mem.read(console, cpu.SP as usize);
+        mem.read(console, cpu.SP as u16);
     };
 
     let pushin_p = || {
@@ -50,7 +88,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: Opcode) {
         p |= (cpu.negative as u8) << 7;
 
         push(p);
-    }
+    };
 
     let pullin_p = || {
         let p = pull();
@@ -60,7 +98,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: Opcode) {
         cpu.decimal = (p & 0b00001000) > 0;
         cpu.overflow = (p & 0b01000000) > 0;
         cpu.negative = (p & 0b10000000) > 0;
-    }
+    };
     /*
     ---- ----
     NVss DIZC
@@ -88,7 +126,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: Opcode) {
         0x01 | 0x05 | 0x09 | 0x0D | 0x11 | 0x15 | 0x19 | 0x1D => { // ORA
             match opcode.address_mode {
                 1 => {
-                    cpu.A |= (cpu.PC + 1)
+                    cpu.A |= (cpu.PC + 1);
                 }
                 4 => {
                     cpu.A |= mem.read(console, ((cpu.PC + 1) | (cpu.PC + 2) << 8) as usize);

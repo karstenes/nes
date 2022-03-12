@@ -15,13 +15,13 @@ impl Memory {
         }
     }
 
-    pub fn read(self, console: &mut Console, index: usize) -> u8 {
+    pub fn read(self, console: &mut Console, index: u16) -> u8 {
         match index {
             index if index < 0x2000 => {
-                self.ram[index%0x800]
+                self.ram[(index%0x800) as usize]
             }
             index if index < 0x4000 => {
-                readPPU(&mut console.ppu, index%0x8 + 0x2000)
+                readPPU(&mut console.ppu, (index%0x8 + 0x2000) as usize)
             }
             index if index < 0x8000 => {
                 return 0
@@ -32,7 +32,11 @@ impl Memory {
         }
     }
 
-    pub fn write(self, console: &mut Console, index: usize, data: u8) {
+    pub fn read16(self, console: &mut Console, index: u16) -> u16 {
+        ((self.read(console, index+1) as u16) << 8) | (self.read(console, index) as u16)
+    }
+
+    pub fn write(self, console: &mut Console, index: u16, data: u8) {
         match index {
 
             _ => {
