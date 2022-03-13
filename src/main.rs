@@ -24,7 +24,7 @@ pub struct CPU {
     overflow: bool,
     negative: bool,
     interupt: bool,
-    pause: u64
+    pause: u8
 }
 
 impl CPU {
