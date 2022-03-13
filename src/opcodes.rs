@@ -9,64 +9,116 @@ fn pushin_p(console: &mut Console) {
 
 }
 
-pub fn interpret_opcode(console: &mut Console, opcode: Opcode) {
-/*  0 = accumulator
-    1 = immed
-    2 = implied
-    3 = relative
-    4 = absolute
-    5 = zero page
-    6 = indirect
-    7 = absolute indexed x
-    8 = absolute indexed y
-    9 = zero page indexed x
-    10 = zero page indexed y
-    11 = indexed indirect
-    12 = indirect indexed */
+pub fn interpret_opcode(console: &mut Console, opcode: u8) {
 
     let cpu = &mut console.CPU;
     let mem = &console.Memory;
     let pc = cpu.PC;
 
-    let addr = match opcode.address_mode {
-        0 => 0,
+    let aaa = (opcode & 0b11100000) >> 5;
+    let bbb = (opcode & 0b00011100) >> 2;
+    let cc = opcode & 0b00000011;
 
-        1 => pc+1,
-
-        2 => 0,
-
-        3 => {
-            match mem.read(console, pc+1) {
-                x if x < 128 => {
-                    pc+2+(x as u16)
+    let addr: u16 = match cc {
+        0b00 => {
+            match bbb {
+                0b000 => { // immed
+                    if aaa >> 5 > 0b011 {
+                        pc+1
+                    } else if opcode == 0x20 {
+                        mem.read16(console, mem.read16(console, pc+1))
+                    } else {
+                        0
+                    }
                 }
-                x => {
-                    pc+2-(!((x as u16 | 0xFF00)-1))
+                0b001 => { // zero page
+                    mem.read16(console, pc+1)
+                }
+                0b011 => { // absolute
+                    if opcode == 0x6C {
+                        mem.read16(console, mem.read16(console, pc+1))
+                    } else {
+                        mem.read16(console, pc+1)
+                    }
+                }
+                0b101 => { // zp indexed x
+                    ((mem.read(console, pc+1) + cpu.X) as u16) % 0xFF
+                }
+                0b111 => { // abs indexed x
+                    mem.read16(console, pc+1) + (cpu.X as u16)
+                }
+                _ => {
+                    0
                 }
             }
-        },
-
-        4 => mem.read16(console, pc+1),
-
-        5 => mem.read(console, pc+1) as u16,
-
-        6 => mem.read16(console,mem.read16(console, pc+1)),
-
-        7 => mem.read16(console, pc+1) + (cpu.X as u16),
-
-        8 => mem.read16(console, pc+1) + (cpu.Y as u16),
-
-        9 => ((mem.read(console, pc+1) + cpu.X) as u16) % 0xFF,
-
-        10 => ((mem.read(console, pc+1) + cpu.X) as u16) % 0xFF,
-
-        11 => mem.read16(console, mem.read16(console, pc+1+(cpu.X as u16)))
-
-        12 => mem.read16(console, mem.read16(console, pc+1)) + (cpu.Y as u16)
+        }
+        0b01 => {
+            match bbb {
+                0b000 => { // (zp,X)
+                    mem.read16(console, (mem.read(console, pc+1) as u16 + cpu.X as u16)% 0xFF) as u16
+                }
+                0b001 => { // zp
+                    mem.read(console, pc+1) as u16
+                }
+                0b010 => { // immed
+                    pc+1
+                }
+                0b011 => { // abs
+                    mem.read16(console, pc+1)
+                }
+                0b100 => { // (zp), Y
+                    mem.read16(console, (mem.read(console, pc+1)) as u16) + cpu.Y as u16
+                }
+                0b101 => { // zp,X
+                    (mem.read(console, pc+1) as u16 + cpu.X as u16) % 0xFF
+                }
+                0b110 => { // abs, Y
+                    mem.read16(console, pc+1) + (cpu.Y as u16)
+                }
+                0b111 => { // abs, X
+                    mem.read16(console, pc+1) + (cpu.X as u16)
+                }
+            }
+        }
+        0b10 => {
+            match bbb {
+                0b000 => {
+                    if aaa >> 5 > 0b011 {
+                        pc+1
+                    } else {
+                        0
+                    }
+                }
+                0b001 => { // zp
+                    mem.read(console, pc+1) as u16
+                }
+                0b011 => { // abs
+                    mem.read16(console, pc+1)
+                }
+                0b101 => {
+                    if opcode == 0x96 || opcode == 0xB6 {
+                        (mem.read(console, pc+1) as u16 + cpu.Y as u16) % 0xFF // zp, Y
+                    } else {
+                        (mem.read(console, pc+1) as u16 + cpu.X as u16) % 0xFF // zp, X
+                    }
+                }
+                0b111 => {
+                    if opcode == 0x9E || opcode == 0xBE {
+                        mem.read16(console, pc+1) + (cpu.Y as u16)
+                    } else {
+                        mem.read16(console, pc+1) + (cpu.X as u16)
+                    }
+                }
+                _ => {
+                    0
+                }
+            }
+        }
+        0b11 => {
+            unimplemented!("Undocumented opcode used (unimplemented)")
+        }
+        
     };
-
-   
-    
 
     let push = |data: u8| {
         mem.write(console, cpu.SP as u16, data);
@@ -124,18 +176,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: Opcode) {
             cpu.PC |= (mem.read(console, 0xFFFF) as u16) << 8;
         }
         0x01 | 0x05 | 0x09 | 0x0D | 0x11 | 0x15 | 0x19 | 0x1D => { // ORA
-            match opcode.address_mode {
-                1 => {
-                    cpu.A |= (cpu.PC + 1);
-                }
-                4 => {
-                    cpu.A |= mem.read(console, ((cpu.PC + 1) | (cpu.PC + 2) << 8) as usize);
-                }
-                5 => {
-                    cpu.A |= |= mem.read(console, (cpu.PC + 1) as usize);
-                }
-            }
-            cpu.A |= mem.read(console, )
+            cpu.A |= mem.read(console, addr);
         }
     }
 }
