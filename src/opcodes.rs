@@ -272,5 +272,87 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0x01 | 0x05 | 0x09 | 0x0D | 0x11 | 0x15 | 0x19 | 0x1D => { // ORA
             ORA();
         }
+        0x02 | 0x22 | 0x42 | 0x62 | 0x12 | 0x32 | 0x52 | 0x72 | 0x92 | 0xB2 | 0xD2 | 0xF2 => { // STP
+            panic!("STP inst");
+        }
+        0x04 | 0x0C | 0x14 | 0x1A | 0x1C | 0x34 | 0x3A | 0x3C | 0x44 | 0x54 | 0x5A | 0x5C => { // NOP
+
+        }
+        0x06 | 0x0A | 0x0E | 0x16 | 0x1E => { // ASL
+
+        }
+        0x08 => { // PHP
+            pushin_p();
+        }
+        0x10 => { // BPL
+
+        }
+        0x18 => { // CLC
+
+        }
+        0x20 => { // JSR
+
+        }
+        0x21 | 0x25 | 0x29 | 0x2D | 0x31 | 0x35 | 0x39 | 0x3D => { // AND
+            AND();
+        }
+        0x24 | 0x2C => { // BIT
+
+        }
+        0x26 | 0x2A | 0x2E | 0x36 | 0x3E => { // ROL
+
+        }
+        0x28 => { // PLP
+            pullin_p();
+        }
+        0x30 => { // BMI
+
+        }
+        0x38 => { // SEC
+
+        }
+        0x40 => { // RTI
+
+        }
+        0x41 | 0x45 | 0x49 | 0x4D | 0x51 | 0x55 | 0x59 | 0x5D => {
+            EOR();
+        }
+        0x46 => { // LSR
+
+        }
+        0x48 => { // PHA
+            push(cpu.A);
+        }
+        0x4C | 0x6C => { // JMP
+            cpu.PC = addr;
+        }
+        0x5C => { // BVC
+
+        }
+        0x58 => { // CLI
+
+        }
+        0x60 => { // RTS
+
+        }
+        0x61 | 0x65 | 0x69 | 0x6D | 0x71 | 0x75 | 0x79 | 0x7D => {
+            ADC();
+        }
+        0x66 => { // ROR
+
+        }
+        0x70 => { // BVS
+            
+        }
+        0x78 => { // SEI
+
+        }
+        0x84 => { // STY
+
+        }
+        0x88 => { // DEY
+
+        }
+
     }
 }
