@@ -97,7 +97,5 @@ pub struct Console {
     Memory: memory::Memory
 }
 
-fn main() {
-    let mut console = Console {CPU: CPU::new(), PPU: PPU::new(), APU: APU::new(), Memory: memory::Memory::new()};
-        
+fn main() {        
 }
