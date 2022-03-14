@@ -6,6 +6,9 @@
 /// 
 /// 
 
+use std::{thread, time};
+
+
 mod memory;
 mod opcodes;
 
@@ -97,5 +100,9 @@ pub struct Console {
     Memory: memory::Memory
 }
 
-fn main() {        
+fn main() {    
+    for _ in 1..10 {
+    println!("bruh");
+    thread::sleep(time::Duration::from_secs(1));
+    }
 }

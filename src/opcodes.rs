@@ -1,7 +1,7 @@
 use super::*;
 use memory;
 
-static cyclecount: [u8; 256] = [
+static CYCLECOUNT: [u8; 256] = [
 7, 6, 2, 8, 3, 3, 5, 5, 3, 2, 2, 2, 4, 4, 6, 6,
 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7,
 6, 6, 2, 8, 3, 3, 5, 5, 4, 2, 2, 2, 4, 4, 6, 6,
@@ -27,7 +27,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         console.CPU.PC += 1;
         return;
     } else {
-        console.CPU.pause = cyclecount[opcode as usize] - 1; // lazy (probably should fix the LUT)
+        console.CPU.pause = CYCLECOUNT[opcode as usize] - 1; // lazy (probably should fix the LUT)
     }
 
     let pc = console.CPU.PC;
@@ -110,6 +110,9 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                     }
                     temp + (console.CPU.X as u16)
                 }
+                _ => {
+                    panic!("impossible to reach");
+                }
             }
         }
         0b10 => {
@@ -157,8 +160,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
     macro_rules! push{
         ($data:expr)=>{
             {
-            let temp = console.CPU.SP;
-            memory::write(console, temp as u16, $data);
+            memory::write(console, (console.CPU.SP as u16)|0x100, $data);
             console.CPU.SP -= 1;
             }
         }
@@ -168,7 +170,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         ()=>{
             {
             console.CPU.SP += 1;
-            memory::read(console, console.CPU.SP as u16)
+            memory::read(console, (console.CPU.SP as u16)|0x100)
             }
         }
     }
@@ -254,15 +256,15 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
     }
 
-    macro_rules! STA{
-        ()=>{
-            memory::write(console, addr, console.CPU.A);
+    macro_rules! STORE{
+        ($reg:expr)=>{
+            memory::write(console, addr, $reg);
         }
     }
 
-    macro_rules! LDA {
-        ()=>{
-        console.CPU.A = memory::read(console, addr);
+    macro_rules! LOAD {
+        ($reg:expr)=>{
+        $reg = memory::read(console, addr);
         }
     }
 
@@ -311,7 +313,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("STP inst");
         }
         0x04 | 0x0C | 0x14 | 0x1A | 0x1C | 0x34 | 0x3A | 0x3C | 0x44 | 0x54 | 0x5A | 0x5C => { // NOP
-
+            return;
         }
         0x06 | 0x0A | 0x0E | 0x16 | 0x1E => { // ASL
             if addr == 0 {
@@ -341,7 +343,9 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.carry = false;
         }
         0x20 => { // JSR
-
+            push!(((console.CPU.PC & 0xFF00) >> 8) as u8);
+            push!((console.CPU.PC & 0x00FF) as u8);
+            console.CPU.PC = addr;
         }
         0x21 | 0x25 | 0x29 | 0x2D | 0x31 | 0x35 | 0x39 | 0x3D => { // AND
             AND!();
@@ -353,7 +357,31 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.overflow = (temp & 0x40) != 0;
         }
         0x26 | 0x2A | 0x2E | 0x36 | 0x3E => { // ROL
-
+            if addr == 0 {
+                if console.CPU.carry {
+                    console.CPU.carry = (console.CPU.A & 0x80) != 0;
+                    console.CPU.A <<= 1;
+                    console.CPU.A += 1;
+                } else {
+                    console.CPU.carry = (console.CPU.A & 0x80) != 0;
+                    console.CPU.A <<= 1;
+                }
+                console.CPU.negative = (console.CPU.A & 0x80) != 0;
+                console.CPU.zero = console.CPU.A == 0;
+            } else {
+                let mut temp = memory::read(console, addr);
+                if console.CPU.carry {
+                    console.CPU.carry = (temp & 0x80) != 0;
+                    temp <<= 1;
+                    temp += 1;
+                } else {
+                    console.CPU.carry = (temp & 0x80) != 0;
+                    temp <<= 1;
+                }
+                console.CPU.negative = (temp & 0x80) != 0;
+                console.CPU.zero = temp == 0;
+                memory::write(console, addr, temp);
+            }
         }
         0x28 => { // PLP
             pullin_p!();
@@ -365,22 +393,31 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             }
         }
         0x38 => { // SEC
-
+            console.CPU.carry = true;
         }
         0x40 => { // RTI
-
+            pullin_p!();
+            let mut temp = pull!() as u16;
+            temp |= (pull!() as u16) << 8;
+            console.CPU.PC = temp;
         }
         0x41 | 0x45 | 0x49 | 0x4D | 0x51 | 0x55 | 0x59 | 0x5D => {
             EOR!();
         }
         0x46 | 0x4A | 0x4E | 0x56 | 0x5E => { // LSR
-
+            let mut temp = memory::read(console, addr);
+            console.CPU.carry = (temp & 0x01) != 0;
+            temp >>= 1;
+            console.CPU.negative = false;
+            console.CPU.zero = temp == 0;
+            memory::write(console, addr, temp);
         }
         0x48 => { // PHA
             push!(console.CPU.A);
         }
         0x4C | 0x6C => { // JMP
             console.CPU.PC = addr;
+            return;
         }
         0x50 => { // BVC
             if !console.CPU.overflow {
@@ -393,16 +430,42 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.interupt_disable = false;
         }
         0x60 => { // RTS
-
+            let mut temp = pull!() as u16;
+            temp |= (pull!() as u16) << 8;
+            console.CPU.PC = temp;
         }
         0x61 | 0x65 | 0x69 | 0x6D | 0x71 | 0x75 | 0x79 | 0x7D => {
             ADC!();
         }
         0x66 | 0x6A | 0x6E | 0x76 | 0x7E => { // ROR
-
+            if addr == 0 {
+                if console.CPU.carry {
+                    console.CPU.carry = (console.CPU.A & 0x01) != 0;
+                    console.CPU.A = (console.CPU.A >> 1) + 0x80;
+                } else {
+                    console.CPU.carry = (console.CPU.A & 0x01) != 0;
+                    console.CPU.A >>= 1;
+                }
+                console.CPU.negative = console.CPU.carry;
+                console.CPU.zero = console.CPU.A == 0;
+            } else {
+                let mut temp = memory::read(console, addr);
+                if console.CPU.carry {
+                    console.CPU.carry = (temp & 0x01) != 0;
+                    temp = (temp >> 1) + 0x80;
+                } else {
+                    console.CPU.carry = (temp & 0x01) != 0;
+                    temp >>= 1;
+                }
+                console.CPU.negative = console.CPU.carry;
+                console.CPU.zero = temp == 0;
+                memory::write(console, addr, temp);
+            }
         }
         0x68 => { // PLA
-
+            console.CPU.A = pull!();
+            console.CPU.negative = (console.CPU.A & 0x80) != 0;
+            console.CPU.zero = console.CPU.A == 0;
         }
         0x70 => { // BVS
             if console.CPU.overflow {
@@ -411,22 +474,26 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             }
         }
         0x78 => { // SEI
-
+            console.CPU.interupt_disable = true;
         }
         0x80 | 0x85 | 0x8D | 0x91 | 0x95 | 0x99 | 0x9D => { // STA
-
+            STORE!(console.CPU.A);
         }
         0x84 | 0x8C | 0x94 => { // STY
-
+            STORE!(console.CPU.Y);
         }
         0x86 | 0x8E | 0x96 => { // STX
-
+            STORE!(console.CPU.X);
         }
         0x88 => { // DEY
-
+            console.CPU.Y -= 1;
+            console.CPU.negative = (console.CPU.Y & 0x80) != 0;
+            console.CPU.zero = console.CPU.Y == 0;
         }
         0x8A => { // TXA
-
+            console.CPU.A = console.CPU.X;
+            console.CPU.negative = (console.CPU.A & 0x80) != 0;
+            console.CPU.zero = console.CPU.A == 0;
         }
         0x90 => { // BCC
             if !console.CPU.carry {
@@ -435,31 +502,37 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             }
         }
         0x98 => { // TYA
-
+            console.CPU.A = console.CPU.Y;
+            console.CPU.negative = (console.CPU.A & 0x80) != 0;
+            console.CPU.zero = console.CPU.A == 0;
         }
         0x9A => { // TXS
-
+            console.CPU.SP = console.CPU.X;
         }
         0x9C => { // SHY
-
+            panic!("bad instruction (SHY)");
         }
         0x9E => { // SHX
-
+            panic!("bad instruction (SHX)");
         }
         0xA0 | 0xA4 | 0xAC | 0xB4 | 0xBC => { // LDY
-
+            LOAD!(console.CPU.Y);  
         }
         0xA1 | 0xA5 | 0xA9 | 0xAD | 0xB1 | 0xB5 | 0xB9 | 0xBD => { // LDA
-            LDA!();
+            LOAD!(console.CPU.A);
         }
         0xA2 | 0xA6 | 0xAE | 0xB6 | 0xBE => { // LDX
-
+            LOAD!(console.CPU.X);
         }
         0xA8 => { // TAY
-
+            console.CPU.Y = console.CPU.A;
+            console.CPU.negative = (console.CPU.Y & 0x80) != 0;
+            console.CPU.zero = console.CPU.Y == 0;
         }
         0xAA => { // TAX
-
+            console.CPU.X = console.CPU.A;
+            console.CPU.negative = (console.CPU.X & 0x80) != 0;
+            console.CPU.zero = console.CPU.X == 0;
         }
         0xB0 => { // BCS
             if console.CPU.carry {
@@ -471,7 +544,9 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.overflow = false;
         }
         0xBA => { // TSX
-
+            console.CPU.X = console.CPU.SP;
+            console.CPU.negative = (console.CPU.X & 0x80) != 0;
+            console.CPU.zero = console.CPU.X == 0;
         }
         0xC0 | 0xC4 | 0xCC => { // CPY
             CMP!(console.CPU.Y);
@@ -486,7 +561,9 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             memory::write(console, addr, temp);
         }
         0xC8 => { // INY
-
+            console.CPU.Y += 1;
+            console.CPU.negative = (console.CPU.Y & 0x80) != 0;
+            console.CPU.zero = console.CPU.Y == 0;
         }
         0xCA => { // DEX
             console.CPU.X -= 1;
@@ -509,10 +586,15 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             SBC!();
         }
         0xE6 | 0xEE | 0xF6 | 0xFE => { // INC
-
+            let temp = memory::read(console, addr) + 1;
+            console.CPU.negative = (temp & 0x80) != 0;
+            console.CPU.zero = temp == 0;
+            memory::write(console, addr, temp);
         }
         0xE8 => { // INX
-
+            console.CPU.X += 1;
+            console.CPU.negative = (console.CPU.X & 0x80) != 0;
+            console.CPU.zero = console.CPU.X == 0;
         }
         0xF0 => { // BEQ
             if console.CPU.zero {
@@ -521,7 +603,10 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             }
         }
         0xF8 => { // SED
-
+            console.CPU.decimal = true;
+        }
+        _ => {
+            panic!("unknown opcode");
         }
     }
     console.CPU.PC += 1;
