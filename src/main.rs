@@ -1,3 +1,4 @@
+#![allow(non_camel_case_types, non_snake_case)]
 ///
 /// 
 /// 
@@ -9,7 +10,7 @@
 
 use std::io::Read;
 
-
+mod mapper;
 mod memory;
 mod opcodes;
 
@@ -94,17 +95,31 @@ impl APU {
     }
 }
 
+
+
 #[allow(non_camel_case_types)]
-struct iNES {
+#[derive(Debug)]
+pub struct iNES {
     // header
     head: usize,
     PGRSIZE: u8,
     CHRSIZE: u8, // 0 = CHR RAM
-    flags6: u8,
-    flags7: u8,
-    flags8: u8,
-    flags9: u8,
-    flags10: u8,
+
+    // Flags 6
+    mirror: bool, // false = horizontal, true = vertical
+    bat_PRGRAM: bool,
+    has_trainer: bool,
+    ignore_mirror: bool,
+
+    mapper: mapper::Mapper,
+
+    // Flags 7
+    unisystem: bool,
+    playchoice10: bool,
+    nes2: bool,
+
+    // Flags 9
+    region: bool, // false: NTSC, true: PAL
 
     // body
     trainer: Vec<u8>,
@@ -112,23 +127,19 @@ struct iNES {
     CHR: Vec<u8>
 }
 
-struct Game {
-    PRG_ROM: Vec<u8>,
-    CHR_ROM: Vec<u8>,
-
-}
 
 pub struct Console {
     CPU: CPU,
     PPU: PPU,
     APU: APU,
-    Memory: memory::Memory
+    Memory: memory::Memory,
+    Game: iNES,
 }
 
 #[allow(non_snake_case)]
 fn read_iNES(path: String) -> Result<iNES, std::io::Error> {
     let mut file = std::fs::File::open(path)?;
-    let mut rom: Vec<u8> = vec![0;1024];
+    let mut rom: Vec<u8> = vec![0;file.metadata().unwrap().len() as usize];
     file.read(&mut rom)?;
     
 
@@ -142,11 +153,21 @@ fn read_iNES(path: String) -> Result<iNES, std::io::Error> {
         head: 0x4e45531a,
         PGRSIZE: rom[4],
         CHRSIZE: rom[5],
-        flags6: rom[6],
-        flags7: rom[7],
-        flags8: rom[8],
-        flags9: rom[9],
-        flags10: rom[10],
+
+
+        mirror: (rom[6] & 0x01) != 0, //
+        bat_PRGRAM: (rom[6] & 0x02) != 0,
+        has_trainer: (rom[6] & 0x04) != 0,
+        ignore_mirror: (rom[6] & 0x08) != 0,
+        
+        mapper: mapper::Mapper::new((rom[7] & 0xF0) | ((rom[6] & 0xF0)>>4)),
+
+        unisystem: (rom[7] & 0x01) != 0,
+        playchoice10: (rom[7] & 0x02) != 0,
+        nes2: (rom[7] & 0x04) != 0,
+
+        region: (rom[9] & 0x01) != 0,
+
 
         trainer: vec![0;if rom[6] & 0x4 != 0 {8192} else {0}],
         PRG: rom[(16+(if rom[6] & 0x4 != 0 {512} else {0}))..(16+(if rom[6] & 0x4 != 0 {512} else {0})+(rom[4] as usize*16384))].to_vec(),
@@ -157,5 +178,5 @@ fn read_iNES(path: String) -> Result<iNES, std::io::Error> {
 fn main() {    
     let dk = read_iNES("dk.nes".to_string()).expect("Read Error");
 
-    print!("PGRSIZE: {}\nCHRSIZE: {}\n", dk.PGRSIZE, dk.CHRSIZE);
+    print!("{:?}", dk.mapper);
 }
