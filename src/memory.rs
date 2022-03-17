@@ -1,6 +1,7 @@
-#![allow(non_snake_case)]
+#![allow(non_camel_case_types, non_snake_case)]
 
 use super::*;
+use mapper;
 
 pub struct Memory {
     ram: Vec<u8>,
@@ -15,8 +16,11 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
         index if index < 0x4000 => {
             readPPU(&mut console.PPU, (index%0x8 + 0x2000) as usize)
         }
-        index if index < 0x8000 => {
-            return 0
+        index if index < 0x6000 => {
+            unimplemented!();
+        }
+        index if (index >= 0x6000) && (index < 0xFFFF) => {
+            mapper::read(&console.Game, index)
         }
         _ => {
             panic!("bad read addr");
@@ -37,6 +41,9 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
         }
         index if index < 0x4000 => {
             writePPU(&mut console.PPU, (index%0x8 + 0x2000) as usize, data);
+        }
+        index if (index >= 0x6000) && (index < 0xFFFF) => {
+            mapper::write(&mut console.Game, index, data);
         }
         _ => {
             panic!("bad write addr");
@@ -160,3 +167,4 @@ fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
         }
     }
 }
+
