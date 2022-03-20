@@ -22,14 +22,33 @@ static CYCLECOUNT: [u8; 256] = [
 2, 5, 2, 8, 4, 4, 6, 6, 2, 4, 2, 7, 4, 4, 7, 7
 ];
 
+static INSTRSIZE: [u8; 256] = [
+1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 0, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 0, 3, 0, 0, 
+2, 2, 2, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
+2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0
+];
+
 pub fn interpret_opcode(console: &mut Console, opcode: u8) {
 
     if console.CPU.pause > 0 {
         console.CPU.pause -= 1;
-        console.CPU.PC += 1;
         return;
     } else {
-        console.CPU.pause = CYCLECOUNT[opcode as usize] - 1; // lazy (probably should fix the LUT)
+        console.CPU.pause = CYCLECOUNT[opcode as usize];
+        console.CPU.jump = false;
     }
 
     let pc = console.CPU.PC;
@@ -62,6 +81,9 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                         memory::read16(console, pc+1)
                     }
                 }
+                0b100 => {
+                    (pc as i64 + (memory::read(console, pc+1) as i64)) as u16
+                }
                 0b101 => { // zp indexed x
                     ((memory::read(console, pc+1) + console.CPU.X) as u16) % 0xFF
                 }
@@ -91,7 +113,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                 0b100 => { // (zp), Y
                     let temp = memory::read16(console, pc+1);
                     if ((console.CPU.Y as u16 + (temp & 0xFF)) & 0x100) > 0 {
-                        console.CPU.pause += 1;
+                        console.CPU.PC += 1;
                     }
                     memory::read16(console, temp as u16) + console.CPU.Y as u16
                 }
@@ -101,14 +123,14 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                 0b110 => { // abs, Y
                     let temp = memory::read16(console, pc+1);
                     if ((console.CPU.Y as u16 + (temp & 0xFF)) & 0x100) > 0 {
-                        console.CPU.pause += 1;
+                        console.CPU.PC += 1;
                     }
                     temp + (console.CPU.Y as u16)
                 }
                 0b111 => { // abs, X
                     let temp = memory::read16(console, pc+1);
                     if ((console.CPU.X as u16 + (temp & 0xFF)) & 0x100) > 0 {
-                        console.CPU.pause += 1;
+                        console.CPU.PC += 1;
                     }
                     temp + (console.CPU.X as u16)
                 }
@@ -158,6 +180,8 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("unreachable")
         }
     };
+
+    //println!("ADDR: 0x{:x}", addr);
 
     macro_rules! push{
         ($data:expr)=>{
@@ -306,6 +330,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.break_cmd = false;
             console.CPU.interupt_disable = true;
             console.CPU.PC = memory::read16(console, 0xFFFE);
+            console.CPU.jump = true;
 
         }
         0x01 | 0x05 | 0x09 | 0x0D | 0x11 | 0x15 | 0x19 | 0x1D => { // ORA
@@ -315,7 +340,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("STP inst");
         }
         0x04 | 0x0C | 0x14 | 0x1A | 0x1C | 0x34 | 0x3A | 0x3C | 0x44 | 0x54 | 0x5A | 0x5C => { // NOP
-            return;
+            
         }
         0x06 | 0x0A | 0x0E | 0x16 | 0x1E => { // ASL
             if addr == 0 {
@@ -338,7 +363,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0x10 => { // BPL
             if !console.CPU.negative {
                 console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.jump = true;
             }
         }
         0x18 => { // CLC
@@ -348,6 +373,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             push!(((console.CPU.PC & 0xFF00) >> 8) as u8);
             push!((console.CPU.PC & 0x00FF) as u8);
             console.CPU.PC = addr;
+            console.CPU.jump = true;
         }
         0x21 | 0x25 | 0x29 | 0x2D | 0x31 | 0x35 | 0x39 | 0x3D => { // AND
             AND!();
@@ -391,7 +417,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0x30 => { // BMI
             if console.CPU.negative {
                 console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.jump = true;
             }
         }
         0x38 => { // SEC
@@ -402,6 +428,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             let mut temp = pull!() as u16;
             temp |= (pull!() as u16) << 8;
             console.CPU.PC = temp;
+            console.CPU.jump = true;
         }
         0x41 | 0x45 | 0x49 | 0x4D | 0x51 | 0x55 | 0x59 | 0x5D => {
             EOR!();
@@ -419,12 +446,12 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0x4C | 0x6C => { // JMP
             console.CPU.PC = addr;
-            return;
+            console.CPU.jump = true;
         }
         0x50 => { // BVC
             if !console.CPU.overflow {
                 console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.jump = true;
             }
 
         }
@@ -435,6 +462,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             let mut temp = pull!() as u16;
             temp |= (pull!() as u16) << 8;
             console.CPU.PC = temp;
+            console.CPU.jump = true;
         }
         0x61 | 0x65 | 0x69 | 0x6D | 0x71 | 0x75 | 0x79 | 0x7D => {
             ADC!();
@@ -472,7 +500,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0x70 => { // BVS
             if console.CPU.overflow {
                 console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.jump = true;
             }
         }
         0x78 => { // SEI
@@ -500,7 +528,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0x90 => { // BCC
             if !console.CPU.carry {
                 console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.jump = true;
             }
         }
         0x98 => { // TYA
@@ -539,7 +567,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0xB0 => { // BCS
             if console.CPU.carry {
                 console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.jump = true;
             }
         }
         0xB8 => { // CLV
@@ -575,7 +603,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0xD0 => { // BNE
             if !console.CPU.zero {
                 console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.jump = true;
             }
         }
         0xD8 => { // CLD
@@ -600,8 +628,8 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0xF0 => { // BEQ
             if console.CPU.zero {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                return;
+                console.CPU.PC = addr;
+                console.CPU.jump = true;
             }
         }
         0xF8 => { // SED
@@ -611,5 +639,5 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("unknown opcode");
         }
     }
-    console.CPU.PC += 1;
+    console.CPU.PC += INSTRSIZE[opcode as usize] as u16;
 }

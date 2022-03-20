@@ -1,7 +1,5 @@
 #![allow(non_camel_case_types, non_snake_case)]
 
-use crate::memory;
-
 use super::*;
 
 #[derive(Debug)]
@@ -48,17 +46,17 @@ pub fn read(cart: &iNES, index: u16) -> u8 {
                     0
                 }
                 index if (index >= 0x8000) && (index < 0xC000) => {
-                    cart.PRG[(index % 0x4000) as usize]
+                    cart.PGR[(index % 0x4000) as usize]
                 }
-                index if (index >= 0xC000) && (index < 0xFFFF) => {
+                index if (index >= 0xC000) => {
                     if cart.PGRSIZE == 1 {
-                        cart.PRG[(index % 0x4000) as usize]
+                        cart.PGR[(index % 0x4000) as usize]
                     } else {
-                        cart.PRG[(index % 0x4000 + 0x4000) as usize]
+                        cart.PGR[(index % 0x4000 + 0x4000) as usize]
                     }
                 }
                 _ => {
-                    panic!("Unknown address {}", index);
+                    panic!("Mapper: Unknown address 0x{:x}", index);
                 }
             }
         }

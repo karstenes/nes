@@ -3,9 +3,17 @@
 use super::*;
 use mapper;
 
+#[derive(Debug)]
 pub struct Memory {
     ram: Vec<u8>,
-    rom: Vec<u8>,
+}
+
+impl Memory {
+    pub fn new() -> Memory {
+        Memory {
+            ram: vec![0;0x800]
+        }
+    }
 }
 
 pub fn read(console: &mut Console, index: u16) -> u8 {
@@ -19,11 +27,11 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
         index if index < 0x6000 => {
             unimplemented!();
         }
-        index if (index >= 0x6000) && (index < 0xFFFF) => {
+        index if (index >= 0x6000) && (index <= 0xFFFF) => {
             mapper::read(&console.Game, index)
         }
         _ => {
-            panic!("bad read addr");
+            panic!("bad read addr: 0x{:x}", index);
         }
     }
 }
@@ -46,7 +54,7 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
             mapper::write(&mut console.Game, index, data);
         }
         _ => {
-            panic!("bad write addr");
+            panic!("bad write addr 0x{:x}", index);
         }
     }
 }
