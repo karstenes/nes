@@ -61,7 +61,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0b00 => {
             match bbb {
                 0b000 => { // immed
-                    if aaa >> 5 > 0b011 {
+                    if aaa > 0b011 {
                         pc+1
                     } else if opcode == 0x20 {
                         let temp = memory::read16(console, pc+1);
@@ -82,7 +82,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                     }
                 }
                 0b100 => {
-                    (pc as i64 + (memory::read(console, pc+1) as i64)) as u16
+                    (pc as i16 + (memory::read(console, pc+1) as i8) as i16) as u16
                 }
                 0b101 => { // zp indexed x
                     ((memory::read(console, pc+1) + console.CPU.X) as u16) % 0xFF
@@ -142,7 +142,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0b10 => {
             match bbb {
                 0b000 => {
-                    if aaa >> 5 > 0b011 {
+                    if aaa > 0b011 {
                         pc+1
                     } else {
                         0
@@ -181,6 +181,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
     };
 
+    //#[cfg(debug_assertions)]
     //println!("ADDR: 0x{:x}", addr);
 
     macro_rules! push{
@@ -546,12 +547,22 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("bad instruction (SHX)");
         }
         0xA0 | 0xA4 | 0xAC | 0xB4 | 0xBC => { // LDY
+            #[cfg(debug_assertions)]
+            println!("Loading Y with {:#04X} from {:#06X}", memory::read(console, addr), addr);
+
+
             LOAD!(console.CPU.Y);  
         }
         0xA1 | 0xA5 | 0xA9 | 0xAD | 0xB1 | 0xB5 | 0xB9 | 0xBD => { // LDA
+            #[cfg(debug_assertions)]
+            println!("Loading A with {:#04X} from {:#06X}", memory::read(console, addr), addr);
+
             LOAD!(console.CPU.A);
         }
         0xA2 | 0xA6 | 0xAE | 0xB6 | 0xBE => { // LDX
+            #[cfg(debug_assertions)]
+            println!("Loading X with {:#04X} from {:#06X}", memory::read(console, addr), addr);
+
             LOAD!(console.CPU.X);
         }
         0xA8 => { // TAY

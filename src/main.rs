@@ -8,9 +8,8 @@
 /// 
 
 
-use std::{io::Read};
+use std::{io::Read, time, thread};
 
-use tokio::time;
 
 use memory::Memory;
 
@@ -42,6 +41,35 @@ impl CPU {
         CPU { A: 0, X: 0, Y: 0, PC: 0xFFFF, SP: 0xFD, carry: false, zero: false, interupt_disable: true, decimal: false, break_cmd: false, overflow: false, negative: false, pause: 0, jump: false } 
     }
 }
+
+/*
+    ---- ----
+    NVss DIZC
+    |||| ||||
+    |||| |||+- Carry
+    |||| ||+-- Zero
+    |||| |+--- Interrupt Disable
+    |||| +---- Decimal
+    ||++------ No CPU effect, see: the B flag
+    |+-------- Overflow
+    +--------- Negative
+    */
+
+impl std::fmt::Display for CPU {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut p = "".to_string();
+        p.push(if self.negative {'N'} else {'n'});
+        p.push(if self.overflow {'V'} else {'v'});
+        p.push('S');
+        p.push(if self.break_cmd {'B'} else {'b'});
+        p.push(if self.decimal {'D'} else {'d'});
+        p.push(if self.interupt_disable {'I'} else {'i'});
+        p.push(if self.zero {'Z'} else {'z'});
+        p.push(if self.carry {'C'} else {'c'});
+        write!(f, "A:{:02X} X:{:02X} Y:{:02X} P:{}", self.A, self.X, self.Y, p)
+    }
+}
+
 
 #[derive(Debug)]
 struct PPU {
@@ -231,30 +259,26 @@ fn read_iNES(path: String) -> Result<iNES, std::io::Error> {
     })
 }
 
-async fn tick(nes: &mut Console) {
-    let opcode = memory::read(nes, nes.CPU.PC);
-    let opcode2 = memory::read(nes, nes.CPU.PC+1);
-    let opcode3 = memory::read(nes, nes.CPU.PC+2);
-    println!("0x{:x} 0x{:x} 0x{:x}", opcode, opcode2, opcode3);
-    opcodes::interpret_opcode(nes, opcode);
-    if nes.CPU.pause == 0 {
-        println!("{:?}", nes.CPU);
-    }
-}
-
-#[tokio::main]
-async fn main() {    
+fn main() {    
     let dk = read_iNES("dk.nes".to_string()).expect("Read Error");
     let mut nes = Console::new(dk);
 
+    println!("Start Vector 0x{:x}", memory::read16(&mut nes, 0xFFFC));
     nes.CPU.PC = memory::read16(&mut nes, 0xFFFC);
-
-    let mut interval = time::interval(time::Duration::from_secs(1));
     
     //println!("{:?}", nes.Game.PGR[0..16].as_ref());
 
     loop {
-        interval.tick().await;
-        tick(&mut nes).await;
+        let pc = nes.CPU.PC;
+        let opcode = memory::read(&mut nes, pc);
+        let opcode2 = memory::read(&mut nes, pc+1);
+        let opcode3 = memory::read(&mut nes, pc+2);
+        if nes.CPU.pause == 0 {
+            //println!("{:?}", nes.CPU);
+            println!("{:} ${:X}: {:02X} {:02X} {:02X} ", nes.CPU, pc, opcode, opcode2, opcode3);
+            
+            thread::sleep(time::Duration::from_secs(1));
+        }
+        opcodes::interpret_opcode(&mut nes, opcode);
     }    
 }

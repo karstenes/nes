@@ -43,6 +43,10 @@ pub fn read16(console: &mut Console, index: u16) -> u16 {
 }
 
 pub fn write(console: &mut Console, index: u16, data: u8) {
+    
+    #[cfg(debug_assertions)]
+    println!("Writing {:#04X} at {:#06X}", data, index);
+
     match index {
         index if index < 0x2000 => {
             console.Memory.ram[(index%0x800) as usize] = data;

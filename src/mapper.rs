@@ -56,7 +56,7 @@ pub fn read(cart: &iNES, index: u16) -> u8 {
                     }
                 }
                 _ => {
-                    panic!("Mapper: Unknown address 0x{:x}", index);
+                    panic!("Mapper: Unknown address ${:02x}", index);
                 }
             }
         }
@@ -80,7 +80,7 @@ pub fn read(cart: &iNES, index: u16) -> u8 {
             }
         }
         _ => {
-            unimplemented!();
+            unimplemented!("Unknown mapper {:?}", &cart.mapper);
         }
     }
 }
