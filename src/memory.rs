@@ -1,11 +1,10 @@
-#![allow(non_camel_case_types, non_snake_case)]
-
 use super::*;
 use mapper;
+use ppu::PPU;
 
 #[derive(Debug)]
 pub struct Memory {
-    ram: Vec<u8>,
+    pub ram: Vec<u8>,
 }
 
 impl Memory {
@@ -17,7 +16,7 @@ impl Memory {
 }
 
 pub fn read(console: &mut Console, index: u16) -> u8 {
-    match index {
+        match index {
         index if index < 0x2000 => {
             console.Memory.ram[(index%0x800) as usize]
         }
@@ -27,7 +26,7 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
         index if index < 0x6000 => {
             unimplemented!();
         }
-        index if (index >= 0x6000) && (index <= 0xFFFF) => {
+        index if (index >= 0x6000) => {
             mapper::read(&console.Game, index)
         }
         _ => {
@@ -37,9 +36,11 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
 }
 
 pub fn read16(console: &mut Console, index: u16) -> u16 {
-    let hi = (read(console, index+1) as u16) << 8;
+    let hi = read(console, index+1) as u16;
     let lo = read(console, index) as u16;
-    hi | lo
+    println!("hi: {:02X} lo: {:02X}", hi, lo);
+    let temp = (hi<<8) | lo;
+    temp
 }
 
 pub fn write(console: &mut Console, index: u16, data: u8) {
@@ -54,7 +55,7 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
         index if index < 0x4000 => {
             writePPU(&mut console.PPU, (index%0x8 + 0x2000) as usize, data);
         }
-        index if (index >= 0x6000) && (index < 0xFFFF) => {
+        index if (index >= 0x6000) => {
             mapper::write(&mut console.Game, index, data);
         }
         _ => {
@@ -172,7 +173,7 @@ fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             } else {
                 ppu.v += 1;
             }
-            unimplemented!();
+            writePPUADDR(ppu, data);
         }
         _ => {
             panic!("bad ppu write addr")

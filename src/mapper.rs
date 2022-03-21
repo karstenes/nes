@@ -1,5 +1,3 @@
-#![allow(non_camel_case_types, non_snake_case)]
-
 use super::*;
 
 #[derive(Debug)]
@@ -29,12 +27,12 @@ impl Mapper {
 }
 
 #[derive(Debug)]
-struct MMC1 {
+pub struct MMC1 {
 
 }
 
 #[derive(Debug)]
-struct UxROM {
+pub struct UxROM {
 
 }
 

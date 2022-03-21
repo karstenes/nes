@@ -1,5 +1,3 @@
-#![allow(non_camel_case_types, non_snake_case)]
-
 use super::*;
 use memory;
 
@@ -64,14 +62,13 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                     if aaa > 0b011 {
                         pc+1
                     } else if opcode == 0x20 {
-                        let temp = memory::read16(console, pc+1);
-                        memory::read16(console, temp)
+                        memory::read16(console, pc+1)
                     } else {
                         0
                     }
                 }
                 0b001 => { // zero page
-                    memory::read16(console, pc+1)
+                    memory::read(console, pc+1) as u16
                 }
                 0b011 => { // absolute
                     if opcode == 0x6C {
@@ -82,7 +79,12 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                     }
                 }
                 0b100 => {
-                    (pc as i16 + (memory::read(console, pc+1) as i8) as i16) as u16
+                    let num = memory::read(console, pc+1);
+                    if (num & 0x80) != 0 {
+                        (console.CPU.PC as i32 + (((!num) as i32)+1)*-1) as u16
+                    } else {
+                        console.CPU.PC + num as u16
+                    }
                 }
                 0b101 => { // zp indexed x
                     ((memory::read(console, pc+1) + console.CPU.X) as u16) % 0xFF
@@ -111,11 +113,11 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                     memory::read16(console, pc+1)
                 }
                 0b100 => { // (zp), Y
-                    let temp = memory::read16(console, pc+1);
+                    let temp = memory::read(console, pc+1) as u16;
                     if ((console.CPU.Y as u16 + (temp & 0xFF)) & 0x100) > 0 {
-                        console.CPU.PC += 1;
+                        console.CPU.pause += 1;
                     }
-                    memory::read16(console, temp as u16) + console.CPU.Y as u16
+                    memory::read16(console, temp) + console.CPU.Y as u16
                 }
                 0b101 => { // zp,X
                     (memory::read(console, pc+1) as u16 + console.CPU.X as u16) % 0xFF
@@ -123,14 +125,14 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
                 0b110 => { // abs, Y
                     let temp = memory::read16(console, pc+1);
                     if ((console.CPU.Y as u16 + (temp & 0xFF)) & 0x100) > 0 {
-                        console.CPU.PC += 1;
+                        console.CPU.pause += 1;
                     }
                     temp + (console.CPU.Y as u16)
                 }
                 0b111 => { // abs, X
                     let temp = memory::read16(console, pc+1);
                     if ((console.CPU.X as u16 + (temp & 0xFF)) & 0x100) > 0 {
-                        console.CPU.PC += 1;
+                        console.CPU.pause += 1;
                     }
                     temp + (console.CPU.X as u16)
                 }
@@ -292,6 +294,8 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
     macro_rules! LOAD {
         ($reg:expr)=>{
         $reg = memory::read(console, addr);
+        console.CPU.zero = $reg == 0;
+        console.CPU.negative = ($reg & 0x80) != 0;
         }
     }
 
@@ -331,8 +335,6 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.break_cmd = false;
             console.CPU.interupt_disable = true;
             console.CPU.PC = memory::read16(console, 0xFFFE);
-            console.CPU.jump = true;
-
         }
         0x01 | 0x05 | 0x09 | 0x0D | 0x11 | 0x15 | 0x19 | 0x1D => { // ORA
             ORA!();
@@ -363,8 +365,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0x10 => { // BPL
             if !console.CPU.negative {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                console.CPU.jump = true;
+                console.CPU.PC = addr;
             }
         }
         0x18 => { // CLC
@@ -372,7 +373,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0x20 => { // JSR
             push!(((console.CPU.PC & 0xFF00) >> 8) as u8);
-            push!((console.CPU.PC & 0x00FF) as u8);
+            push!((console.CPU.PC & 0x00FF) as u8 + 2);
             console.CPU.PC = addr;
             console.CPU.jump = true;
         }
@@ -417,8 +418,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0x30 => { // BMI
             if console.CPU.negative {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                console.CPU.jump = true;
+                console.CPU.PC = addr;
             }
         }
         0x38 => { // SEC
@@ -435,12 +435,19 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             EOR!();
         }
         0x46 | 0x4A | 0x4E | 0x56 | 0x5E => { // LSR
-            let mut temp = memory::read(console, addr);
-            console.CPU.carry = (temp & 0x01) != 0;
-            temp >>= 1;
-            console.CPU.negative = false;
-            console.CPU.zero = temp == 0;
-            memory::write(console, addr, temp);
+            if addr == 0 {
+                console.CPU.carry = (console.CPU.A & 0x01) != 0;
+                console.CPU.A >>= 1;
+                console.CPU.negative = false;
+                console.CPU.zero = console.CPU.A == 0;
+            } else {
+                let mut temp = memory::read(console, addr);
+                console.CPU.carry = (temp & 0x01) != 0;
+                temp >>= 1;
+                console.CPU.negative = false;
+                console.CPU.zero = temp == 0;
+                memory::write(console, addr, temp);
+            }
         }
         0x48 => { // PHA
             push!(console.CPU.A);
@@ -451,8 +458,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0x50 => { // BVC
             if !console.CPU.overflow {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                console.CPU.jump = true;
+                console.CPU.PC = addr;
             }
 
         }
@@ -463,7 +469,6 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             let mut temp = pull!() as u16;
             temp |= (pull!() as u16) << 8;
             console.CPU.PC = temp;
-            console.CPU.jump = true;
         }
         0x61 | 0x65 | 0x69 | 0x6D | 0x71 | 0x75 | 0x79 | 0x7D => {
             ADC!();
@@ -500,8 +505,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0x70 => { // BVS
             if console.CPU.overflow {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                console.CPU.jump = true;
+                console.CPU.PC = addr;
             }
         }
         0x78 => { // SEI
@@ -517,7 +521,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             STORE!(console.CPU.X);
         }
         0x88 => { // DEY
-            console.CPU.Y -= 1;
+            console.CPU.Y = console.CPU.Y.wrapping_sub(1);
             console.CPU.negative = (console.CPU.Y & 0x80) != 0;
             console.CPU.zero = console.CPU.Y == 0;
         }
@@ -528,8 +532,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0x90 => { // BCC
             if !console.CPU.carry {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                console.CPU.jump = true;
+                console.CPU.PC = addr;
             }
         }
         0x98 => { // TYA
@@ -577,8 +580,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         }
         0xB0 => { // BCS
             if console.CPU.carry {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                console.CPU.jump = true;
+                console.CPU.PC = addr;
             }
         }
         0xB8 => { // CLV
@@ -596,25 +598,24 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             CMP!(console.CPU.A);
         }
         0xC6 | 0xCE | 0xD6 | 0xDE => { // DEC
-            let temp = memory::read(console, addr) - 1;
+            let temp = memory::read(console, addr).wrapping_sub(1);
             console.CPU.negative = (temp & 0x80) != 0;
             console.CPU.zero = temp == 0;
             memory::write(console, addr, temp);
         }
         0xC8 => { // INY
-            console.CPU.Y += 1;
+            console.CPU.Y = console.CPU.Y.wrapping_add(1);
             console.CPU.negative = (console.CPU.Y & 0x80) != 0;
             console.CPU.zero = console.CPU.Y == 0;
         }
         0xCA => { // DEX
-            console.CPU.X -= 1;
+            console.CPU.X = console.CPU.X.wrapping_sub(1);
             console.CPU.negative = (console.CPU.X & 0x80) != 0;
             console.CPU.zero = console.CPU.X == 0;
         }
         0xD0 => { // BNE
             if !console.CPU.zero {
-                console.CPU.PC += memory::read(console, addr) as u16;
-                console.CPU.jump = true;
+                console.CPU.PC = addr;
             }
         }
         0xD8 => { // CLD
@@ -627,20 +628,19 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             SBC!();
         }
         0xE6 | 0xEE | 0xF6 | 0xFE => { // INC
-            let temp = memory::read(console, addr) + 1;
+            let temp = memory::read(console, addr).wrapping_add(1);
             console.CPU.negative = (temp & 0x80) != 0;
             console.CPU.zero = temp == 0;
             memory::write(console, addr, temp);
         }
         0xE8 => { // INX
-            console.CPU.X += 1;
+            console.CPU.X = console.CPU.X.wrapping_add(1);
             console.CPU.negative = (console.CPU.X & 0x80) != 0;
             console.CPU.zero = console.CPU.X == 0;
         }
         0xF0 => { // BEQ
             if console.CPU.zero {
                 console.CPU.PC = addr;
-                console.CPU.jump = true;
             }
         }
         0xF8 => { // SED
@@ -650,5 +650,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("unknown opcode");
         }
     }
-    console.CPU.PC += INSTRSIZE[opcode as usize] as u16;
+    if !console.CPU.jump {
+        console.CPU.PC += INSTRSIZE[opcode as usize] as u16;
+    }
 }

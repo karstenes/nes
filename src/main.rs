@@ -1,4 +1,6 @@
 #![allow(non_camel_case_types, non_snake_case)]
+#![allow(dead_code)]
+#![allow(unused_variables)]
 ///
 /// 
 /// 
@@ -10,12 +12,10 @@
 
 use std::{io::Read, time, thread};
 
-
-use memory::Memory;
-
 mod mapper;
 mod memory;
 mod opcodes;
+mod ppu;
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
@@ -37,7 +37,7 @@ pub struct CPU {
 }
 
 impl CPU {
-    fn new() -> Self {
+    pub fn new() -> Self {
         CPU { A: 0, X: 0, Y: 0, PC: 0xFFFF, SP: 0xFD, carry: false, zero: false, interupt_disable: true, decimal: false, break_cmd: false, overflow: false, negative: false, pause: 0, jump: false } 
     }
 }
@@ -66,101 +66,19 @@ impl std::fmt::Display for CPU {
         p.push(if self.interupt_disable {'I'} else {'i'});
         p.push(if self.zero {'Z'} else {'z'});
         p.push(if self.carry {'C'} else {'c'});
-        write!(f, "A:{:02X} X:{:02X} Y:{:02X} P:{}", self.A, self.X, self.Y, p)
+        write!(f, "A:{:02X} X:{:02X} Y:{:02X} SP:{:02X} P:{}", self.A, self.X, self.Y, self.SP, p)
     }
 }
 
 
-#[derive(Debug)]
-struct PPU {
-    palette: Vec<u8>,
-    nametable: Vec<u8>,
-    oam: Vec<u8>,
-
-    // PPUCTRL write 0x2000
-    nmi_enable: bool,
-    master_slave: bool,
-    sprite_height: bool,
-    background_tile_select: bool,
-    sprite_tile_select: bool,
-    increment: bool,
-    nametable_select: u8,
-
-    // PPUMASK write 0x2001
-    blue_emphasis: bool,
-    green_emphasis: bool,
-    red_emphasis: bool,
-    sprite_enable: bool,
-    bg_enable: bool,
-    sprite_left_column_enable: bool,
-    bg_left_column_enable: bool,
-    grayscale: bool,
-
-    // PPUSTATUS  read 0x2002
-    vblank: bool,
-    s0_hit: bool,
-    sprite_overflow: bool,
-
-    oamaddr: usize,
-
-
-    // regs
-    v: u16,
-    t: u16,
-    x: u8,
-    w: bool,
-}
-
-impl PPU {
-    fn new() -> Self {
-        PPU {
-            palette: vec![],
-            nametable: vec![],
-            oam: vec![],
-
-            // PPUCTRL write 0x2000
-            nmi_enable: false,
-            master_slave: false,
-            sprite_height: false,
-            background_tile_select: false,
-            sprite_tile_select: false,
-            increment: false,
-            nametable_select: 0,
-
-            // PPUMASK write 0x2001
-            blue_emphasis: false,
-            green_emphasis: false,
-            red_emphasis: false,
-            sprite_enable: false,
-            bg_enable: false,
-            sprite_left_column_enable: false,
-            bg_left_column_enable: false,
-            grayscale: false,
-
-            // PPUSTATUS  read 0x2002
-            vblank: false,
-            s0_hit: false,
-            sprite_overflow: false,
-
-            oamaddr: 0,
-
-
-            // regs
-            v: 0,
-            t: 0,
-            x: 0,
-            w: false,
-        }
-    }
-}
 
 #[derive(Debug)]
-struct APU {
+pub struct APU {
 
 }
 
 impl APU {
-    fn new() -> Self {
+    pub fn new() -> Self {
         APU {}
     }
 }
@@ -200,20 +118,22 @@ pub struct iNES {
 #[derive(Debug)]
 pub struct Console {
     CPU: CPU,
-    PPU: PPU,
+    PPU: ppu::PPU,
     APU: APU,
     Memory: memory::Memory,
     Game: iNES,
+    cycles: usize,
 }
 
 impl Console {
-    fn new(game: iNES) -> Console {
+    pub fn new(game: iNES) -> Console {
         Console{
         CPU: CPU::new(),
-        PPU: PPU::new(),
+        PPU: ppu::PPU::new(),
         APU: APU::new(),
         Memory: memory::Memory::new(),
-        Game: game
+        Game: game,
+        cycles: 0
         }
     }
 }
@@ -277,8 +197,15 @@ fn main() {
             //println!("{:?}", nes.CPU);
             println!("{:} ${:X}: {:02X} {:02X} {:02X} ", nes.CPU, pc, opcode, opcode2, opcode3);
             
-            thread::sleep(time::Duration::from_secs(1));
+            //thread::sleep(time::Duration::from_millis(1));
         }
         opcodes::interpret_opcode(&mut nes, opcode);
+
+        if nes.cycles%4 == 0 {
+            ppu::stepPPU(&mut nes);
+            println!("[{}, {}]", nes.PPU.scanline, nes.PPU.cycle);
+        }
+
+        nes.cycles += 1
     }    
 }
