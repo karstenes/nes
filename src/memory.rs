@@ -1,6 +1,7 @@
 use super::*;
 use mapper;
 use ppu::PPU;
+use apu::APU;
 
 #[derive(Debug)]
 pub struct Memory {
@@ -23,8 +24,11 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
         index if index < 0x4000 => {
             readPPU(&mut console.PPU, (index%0x8 + 0x2000) as usize)
         }
+        index if index < 0x4017 => {
+            readAPU(&console.APU, index)
+        }
         index if index < 0x6000 => {
-            unimplemented!();
+            panic!("Unimplemented test I/O functionality");
         }
         index if (index >= 0x6000) => {
             mapper::read(&console.Game, index)
@@ -38,14 +42,12 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
 pub fn read16(console: &mut Console, index: u16) -> u16 {
     let hi = read(console, index+1) as u16;
     let lo = read(console, index) as u16;
-    println!("hi: {:02X} lo: {:02X}", hi, lo);
-    let temp = (hi<<8) | lo;
-    temp
+    (hi<<8) | lo
 }
 
 pub fn write(console: &mut Console, index: u16, data: u8) {
     
-    #[cfg(debug_assertions)]
+    #[cfg(debug_prints)]
     println!("Writing {:#04X} at {:#06X}", data, index);
 
     match index {
@@ -179,5 +181,105 @@ fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             panic!("bad ppu write addr")
         }
     }
+}
+
+fn readAPU(apu: &APU, index: u16) -> u8 {
+    match index {
+        _ => {
+            panic!("Bad APU memory read ${:04X}", index);
+        }
+
+    }
+}
+
+fn writeAPU(apu: &mut APU, index: u16, data: u8) {
+    match index {
+        0x4000 => {
+            apu.Pulse1.duty = (data & 0b11000000) >> 6;
+            apu.Pulse1.halt = (data & 0b00100000) != 0;
+            apu.Pulse1.volume = data & 0x0F;
+        }
+        0x4004 => {
+            apu.Pulse2.duty = (data & 0b11000000) >> 6;
+            apu.Pulse2.halt = (data & 0b00100000) != 0;
+            apu.Pulse2.volume = data & 0x0F;
+        }
+        0x4001 => {
+            apu.Pulse1.sweep_en = (data & 0b10000000) != 0;
+            apu.Pulse1.sweep_period = (data & 0b01110000) >> 4;
+            apu.Pulse1.sweep_negate = (data & 0b00001000) != 0;
+            apu.Pulse1.sweep_shift = data & 0b00000111;
+        }
+        0x4005 => {
+            apu.Pulse2.sweep_en = (data & 0b10000000) != 0;
+            apu.Pulse2.sweep_period = (data & 0b01110000) >> 4;
+            apu.Pulse2.sweep_negate = (data & 0b00001000) != 0;
+            apu.Pulse2.sweep_shift = data & 0b00000111;
+        }
+        0x4002 => {
+            apu.Pulse1.timer = (apu.Pulse1.timer & 0xFF00) | (data as u16);
+        }
+        0x4006 => {
+            apu.Pulse2.timer = (apu.Pulse2.timer & 0xFF00) | (data as u16);
+        }
+        0x4003 => {
+            apu.Pulse1.timer = (apu.Pulse1.timer & 0x00FF) | (((data & 0b00000111) as u16) << 8);
+            apu.Pulse1.length_counter_load = (data & 0b11111000) >> 3;
+        }
+        0x4007 => {
+            apu.Pulse2.timer = (apu.Pulse2.timer & 0x00FF) | (((data & 0b00000111) as u16) << 8);
+            apu.Pulse2.length_counter_load = (data & 0b11111000) >> 3;
+        }
+        0x4008 => {
+            apu.Triangle.control = (data & 0b10000000) != 0;
+            apu.Triangle.counter_reload = data & 0b01111111;
+        }
+        0x400A => {
+            apu.Triangle.timer = (apu.Triangle.timer & 0xFF00) | (data as u16);
+        }
+        0x400B => {
+            apu.Triangle.timer = (apu.Triangle.timer & 0x00FF) | (((data & 0b00000111) as u16) << 8);
+            apu.Triangle.length_counter_load = (data & 0b11111000) >> 3;
+        }
+        0x400C => {
+            apu.Noise.halt = (data & 0b00100000) != 0;
+            apu.Noise.constant_volume = (data & 0b00010000) != 0;
+            apu.Noise.volume = data & 0x0F;
+        }
+        0x400E => {
+            apu.Noise.mode = (data & 0b10000000) != 0;
+            apu.Noise.period = data & 0x0F;
+        }
+        0x400F => {
+            apu.Noise.length_counter_load = (data & 0b11111000) >> 3;
+        }
+        0x4010 => {
+            unimplemented!("DMC $4010");
+        }
+        0x4011 => {
+            unimplemented!("DMC $4011");
+        }
+        0x4012 => {
+            unimplemented!("DMC $4012");
+        }
+        0x4013 => {
+            unimplemented!("DMC $4013");
+        }
+        0x4015 => {
+            apu.dmc_en = (data & 0b00010000) != 0;
+            apu.noise_en = (data & 0b00001000) != 0;
+            apu.triangle_en = (data & 0b00000100) != 0;
+            apu.pulse2_en = (data & 0b00000010) != 0;
+            apu.pulse1_en = (data & 0b00000001) != 0;
+        }
+        0x4017 => {
+            apu.fc_mode = (data & 0b10000000) != 0;
+            apu.irq_inhibit = (data & 0b01000000) != 0;
+        }
+        _ => {
+            panic!("Bad APU memory write of {:#04X} to ${:04X}", data, index);
+        }
+        
+    };
 }
 

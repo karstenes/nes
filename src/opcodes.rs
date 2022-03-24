@@ -21,26 +21,18 @@ static CYCLECOUNT: [u8; 256] = [
 ];
 
 static INSTRSIZE: [u8; 256] = [
-1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0,
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
-3, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
-1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
-1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 0, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 0, 3, 0, 0, 
-2, 2, 2, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 
-2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0
+//  0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F 10 11 12 13 14 15 16 17 18 19 1A 1B 1C 1D 1E 1F
+    1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+    0, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+    0, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 0, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+    1, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 0, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+    2, 2, 0, 0, 2, 2, 2, 0, 1, 0, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 0, 3, 0, 0, 
+    2, 2, 2, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+    2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0, 
+    2, 2, 0, 0, 2, 2, 2, 0, 1, 2, 1, 0, 3, 3, 3, 0, 2, 2, 0, 0, 2, 2, 2, 0, 1, 3, 1, 0, 3, 3, 3, 0
 ];
 
 pub fn interpret_opcode(console: &mut Console, opcode: u8) {
-
     if console.CPU.pause > 0 {
         console.CPU.pause -= 1;
         return;
@@ -550,20 +542,20 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("bad instruction (SHX)");
         }
         0xA0 | 0xA4 | 0xAC | 0xB4 | 0xBC => { // LDY
-            #[cfg(debug_assertions)]
+            #[cfg(debug_prints)]
             println!("Loading Y with {:#04X} from {:#06X}", memory::read(console, addr), addr);
 
 
             LOAD!(console.CPU.Y);  
         }
         0xA1 | 0xA5 | 0xA9 | 0xAD | 0xB1 | 0xB5 | 0xB9 | 0xBD => { // LDA
-            #[cfg(debug_assertions)]
+            #[cfg(debug_prints)]
             println!("Loading A with {:#04X} from {:#06X}", memory::read(console, addr), addr);
 
             LOAD!(console.CPU.A);
         }
         0xA2 | 0xA6 | 0xAE | 0xB6 | 0xBE => { // LDX
-            #[cfg(debug_assertions)]
+            #[cfg(debug_prints)]
             println!("Loading X with {:#04X} from {:#06X}", memory::read(console, addr), addr);
 
             LOAD!(console.CPU.X);
@@ -650,7 +642,5 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             panic!("unknown opcode");
         }
     }
-    if !console.CPU.jump {
-        console.CPU.PC += INSTRSIZE[opcode as usize] as u16;
-    }
+    console.CPU.PC += INSTRSIZE[opcode as usize] as u16;
 }

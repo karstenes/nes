@@ -9,13 +9,19 @@
 /// 
 /// 
 
+static OPNAMES: &[&str] = &["BRK", "ORA", "STP", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO", "BPL", "ORA", "STP", "SLO", "NOP", "ORA", "ASL", "SLO", "CLC", "ORA", "NOP", "SLO", "NOP", "ORA", "ASL", "SLO", "JSR", "AND", "STP", "RLA", "BIT", "AND", "ROL", "RLA", "PLP", "AND", "ROL", "ANC", "BIT", "AND", "ROL", "RLA", "BMI", "AND", "STP", "RLA", "NOP", "AND", "ROL", "RLA", "SEC", "AND", "NOP", "RLA", "NOP", "AND", "ROL", "RLA", "RTI", "EOR", "STP", "SRE", "NOP", "EOR", "LSR", "SRE", "PHA", "EOR", "LSR", "ALR", "JMP", "EOR", "LSR", "SRE", "BVC", "EOR", "STP", "SRE", "NOP", "EOR", "LSR", "SRE", "CLI", "EOR", "NOP", "SRE", "NOP", "EOR", "LSR", "SRE", "RTS", "ADC", "STP", "RRA", "NOP", "ADC", "ROR", "RRA", "PLA", "ADC", "ROR", "ARR", "JMP", "ADC", "ROR", "RRA", "BVS", "ADC", "STP", "RRA", "NOP", "ADC", "ROR", "RRA", "SEI", "ADC", "NOP", "RRA", "NOP", "ADC", "ROR", "RRA", "NOP", "STA", "NOP", "SAX", "STY", "STA", "STX", "SAX", "DEY", "NOP", "TXA", "XAA", "STY", "STA", "STX", "SAX", "BCC", "STA", "STP", "AHX", "STY", "STA", "STX", "SAX", "TYA", "STA", "TXS", "TAS", "SHY", "STA", "SHX", "AHX", "LDY", "LDA", "LDX", "LAX", "LDY", "LDA", "LDX", "LAX", "TAY", "LDA", "TAX", "LAX", "LDY", "LDA", "LDX", "LAX", "BCS", "LDA", "STP", "LAX", "LDY", "LDA", "LDX", "LAX", "CLV", "LDA", "TSX", "LAS", "LDY", "LDA", "LDX", "LAX", "CPY", "CMP", "NOP", "DCP", "CPY", "CMP", "DEC", "DCP", "INY", "CMP", "DEX", "AXS", "CPY", "CMP", "DEC", "DCP", "BNE", "CMP", "STP", "DCP", "NOP", "CMP", "DEC", "DCP", "CLD", "CMP", "NOP", "DCP", "NOP", "CMP", "DEC", "DCP", "CPX", "SBC", "NOP", "ISC", "CPX", "SBC", "INC", "ISC", "INX", "SBC", "NOP", "SBC", "CPX", "SBC", "INC", "ISC", "BEQ", "SBC", "STP", "ISC", "NOP", "SBC", "INC", "ISC", "SED", "SBC", "NOP", "ISC", "NOP", "SBC", "INC", "ISC"];
 
-use std::{io::Read, time, thread};
+use std::{io::Read, time, thread, iter::Inspect};
 
 mod mapper;
+
 mod memory;
 mod opcodes;
 mod ppu;
+mod apu;
+
+use apu::APU;
+use ppu::PPU;
 
 #[allow(non_snake_case)]
 #[derive(Debug)]
@@ -70,21 +76,6 @@ impl std::fmt::Display for CPU {
     }
 }
 
-
-
-#[derive(Debug)]
-pub struct APU {
-
-}
-
-impl APU {
-    pub fn new() -> Self {
-        APU {}
-    }
-}
-
-
-
 #[allow(non_camel_case_types)]
 #[derive(Debug)]
 pub struct iNES {
@@ -129,7 +120,7 @@ impl Console {
     pub fn new(game: iNES) -> Console {
         Console{
         CPU: CPU::new(),
-        PPU: ppu::PPU::new(),
+        PPU: PPU::new(),
         APU: APU::new(),
         Memory: memory::Memory::new(),
         Game: game,
@@ -179,6 +170,132 @@ fn read_iNES(path: String) -> Result<iNES, std::io::Error> {
     })
 }
 
+fn InstructionToString(console: &mut Console, opcode: u8) -> String {
+    let pc = console.CPU.PC;
+    let aaa = (opcode & 0b11100000) >> 5;
+    let bbb = (opcode & 0b00011100) >> 2;
+    let cc = opcode & 0b00000011;
+    let addr: u16 = match cc {
+        0b00 => {
+            match bbb {
+                0b000 => { // immed
+                    if aaa > 0b011 {
+                        pc+1
+                    } else if opcode == 0x20 {
+                        memory::read16(console, pc+1)
+                    } else {
+                        0
+                    }
+                }
+                0b001 => { // zero page
+                    memory::read(console, pc+1) as u16
+                }
+                0b011 => { // absolute
+                    if opcode == 0x6C {
+                        let temp = memory::read16(console, pc+1);
+                        memory::read16(console, temp)
+                    } else {
+                        memory::read16(console, pc+1)
+                    }
+                }
+                0b100 => {
+                    let num = memory::read(console, pc+1);
+                    if (num & 0x80) != 0 {
+                        (console.CPU.PC as i32 + (((!num) as i32)+1)*-1) as u16 + 2
+                    } else {
+                        console.CPU.PC + num as u16 + 2
+                    }
+                }
+                0b101 => { // zp indexed x
+                    ((memory::read(console, pc+1) + console.CPU.X) as u16) % 0xFF
+                }
+                0b111 => { // abs indexed x
+                    memory::read16(console, pc+1) + (console.CPU.X as u16)
+                }
+                _ => {
+                    0
+                }
+            }
+        }
+        0b01 => {
+            match bbb {
+                0b000 => { // (zp,X)
+                    let temp = memory::read(console, pc+1);
+                    memory::read16(console, ( temp as u16 + console.CPU.X as u16)% 0xFF) as u16
+                }
+                0b001 => { // zp
+                    memory::read(console, pc+1) as u16
+                }
+                0b010 => { // immed
+                    pc+1
+                }
+                0b011 => { // abs
+                    memory::read16(console, pc+1)
+                }
+                0b100 => { // (zp), Y
+                    let temp = memory::read(console, pc+1) as u16;
+                    memory::read16(console, temp) + console.CPU.Y as u16
+                }
+                0b101 => { // zp,X
+                    (memory::read(console, pc+1) as u16 + console.CPU.X as u16) % 0xFF
+                }
+                0b110 => { // abs, Y
+                    let temp = memory::read16(console, pc+1);
+                    temp + (console.CPU.Y as u16)
+                }
+                0b111 => { // abs, X
+                    let temp = memory::read16(console, pc+1);
+                    temp + (console.CPU.X as u16)
+                }
+                _ => {
+                    panic!("impossible to reach");
+                }
+            }
+        }
+        0b10 => {
+            match bbb {
+                0b000 => {
+                    if aaa > 0b011 {
+                        pc+1
+                    } else {
+                        0
+                    }
+                }
+                0b001 => { // zp
+                    memory::read(console, pc+1) as u16
+                }
+                0b011 => { // abs
+                    memory::read16(console, pc+1)
+                }
+                0b101 => {
+                    if opcode == 0x96 || opcode == 0xB6 {
+                        (memory::read(console, pc+1) as u16 + console.CPU.Y as u16) % 0xFF // zp, Y
+                    } else {
+                        (memory::read(console, pc+1) as u16 + console.CPU.X as u16) % 0xFF // zp, X
+                    }
+                }
+                0b111 => {
+                    if opcode == 0x9E || opcode == 0xBE {
+                        memory::read16(console, pc+1) + (console.CPU.Y as u16)
+                    } else {
+                        memory::read16(console, pc+1) + (console.CPU.X as u16)
+                    }
+                }
+                _ => {
+                    0
+                }
+            }
+        }
+        _ => {
+            panic!("unreachable")
+        }
+    };
+    if addr == 0 {
+        return OPNAMES[opcode as usize].to_string()
+    }
+    format!("{} ${:04X}",OPNAMES[opcode as usize], addr)
+}
+
 fn main() {    
     let dk = read_iNES("dk.nes".to_string()).expect("Read Error");
     let mut nes = Console::new(dk);
@@ -187,23 +304,27 @@ fn main() {
     nes.CPU.PC = memory::read16(&mut nes, 0xFFFC);
     
     //println!("{:?}", nes.Game.PGR[0..16].as_ref());
-
     loop {
         let pc = nes.CPU.PC;
         let opcode = memory::read(&mut nes, pc);
         let opcode2 = memory::read(&mut nes, pc+1);
         let opcode3 = memory::read(&mut nes, pc+2);
-        if nes.CPU.pause == 0 {
-            //println!("{:?}", nes.CPU);
-            println!("{:} ${:X}: {:02X} {:02X} {:02X} ", nes.CPU, pc, opcode, opcode2, opcode3);
-            
-            //thread::sleep(time::Duration::from_millis(1));
+        
+        if nes.cycles%12 == 0 {
+            if nes.CPU.pause == 0 {
+                //println!("{:?}", nes.CPU);
+                let temp = InstructionToString(&mut nes, opcode);
+                println!("{} {:} ${:X}: {:02X} {:02X} {:02X} - {}", nes.cycles/12, nes.CPU, pc, opcode, opcode2, opcode3, temp);
+                //thread::sleep(time::Duration::from_millis(1));
+            }
+            opcodes::interpret_opcode(&mut nes, opcode);
         }
-        opcodes::interpret_opcode(&mut nes, opcode);
 
         if nes.cycles%4 == 0 {
             ppu::stepPPU(&mut nes);
-            println!("[{}, {}]", nes.PPU.scanline, nes.PPU.cycle);
+            if nes.PPU.cycle == 0 {
+            println!("[{}]", nes.PPU.scanline);
+            }
         }
 
         nes.cycles += 1

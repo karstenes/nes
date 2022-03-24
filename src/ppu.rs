@@ -170,4 +170,5 @@ pub fn stepPPU(console: &mut Console) {
             console.PPU.cycle = 0;
         }
     }
+    
 }
