@@ -11,6 +11,9 @@
 
 static OPNAMES: &[&str] = &["BRK", "ORA", "STP", "SLO", "NOP", "ORA", "ASL", "SLO", "PHP", "ORA", "ASL", "ANC", "NOP", "ORA", "ASL", "SLO", "BPL", "ORA", "STP", "SLO", "NOP", "ORA", "ASL", "SLO", "CLC", "ORA", "NOP", "SLO", "NOP", "ORA", "ASL", "SLO", "JSR", "AND", "STP", "RLA", "BIT", "AND", "ROL", "RLA", "PLP", "AND", "ROL", "ANC", "BIT", "AND", "ROL", "RLA", "BMI", "AND", "STP", "RLA", "NOP", "AND", "ROL", "RLA", "SEC", "AND", "NOP", "RLA", "NOP", "AND", "ROL", "RLA", "RTI", "EOR", "STP", "SRE", "NOP", "EOR", "LSR", "SRE", "PHA", "EOR", "LSR", "ALR", "JMP", "EOR", "LSR", "SRE", "BVC", "EOR", "STP", "SRE", "NOP", "EOR", "LSR", "SRE", "CLI", "EOR", "NOP", "SRE", "NOP", "EOR", "LSR", "SRE", "RTS", "ADC", "STP", "RRA", "NOP", "ADC", "ROR", "RRA", "PLA", "ADC", "ROR", "ARR", "JMP", "ADC", "ROR", "RRA", "BVS", "ADC", "STP", "RRA", "NOP", "ADC", "ROR", "RRA", "SEI", "ADC", "NOP", "RRA", "NOP", "ADC", "ROR", "RRA", "NOP", "STA", "NOP", "SAX", "STY", "STA", "STX", "SAX", "DEY", "NOP", "TXA", "XAA", "STY", "STA", "STX", "SAX", "BCC", "STA", "STP", "AHX", "STY", "STA", "STX", "SAX", "TYA", "STA", "TXS", "TAS", "SHY", "STA", "SHX", "AHX", "LDY", "LDA", "LDX", "LAX", "LDY", "LDA", "LDX", "LAX", "TAY", "LDA", "TAX", "LAX", "LDY", "LDA", "LDX", "LAX", "BCS", "LDA", "STP", "LAX", "LDY", "LDA", "LDX", "LAX", "CLV", "LDA", "TSX", "LAS", "LDY", "LDA", "LDX", "LAX", "CPY", "CMP", "NOP", "DCP", "CPY", "CMP", "DEC", "DCP", "INY", "CMP", "DEX", "AXS", "CPY", "CMP", "DEC", "DCP", "BNE", "CMP", "STP", "DCP", "NOP", "CMP", "DEC", "DCP", "CLD", "CMP", "NOP", "DCP", "NOP", "CMP", "DEC", "DCP", "CPX", "SBC", "NOP", "ISC", "CPX", "SBC", "INC", "ISC", "INX", "SBC", "NOP", "SBC", "CPX", "SBC", "INC", "ISC", "BEQ", "SBC", "STP", "ISC", "NOP", "SBC", "INC", "ISC", "SED", "SBC", "NOP", "ISC", "NOP", "SBC", "INC", "ISC"];
 
+
+use sdl2;
+
 use std::{io::Read, time, thread, iter::Inspect};
 
 mod mapper;
@@ -296,7 +299,32 @@ fn InstructionToString(console: &mut Console, opcode: u8) -> String {
     format!("{} ${:04X}",OPNAMES[opcode as usize], addr)
 }
 
-fn main() {    
+fn find_sdl_gl_driver() -> Option<u32> {
+    for (index, item) in sdl2::render::drivers().enumerate() {
+        if item.name == "opengl" {
+            return Some(index as u32);
+        }
+    }
+    None
+}
+
+fn main() {  
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+    let window = video_subsystem.window("Window", 800, 600)
+        .opengl() // this line DOES NOT enable opengl, but allows you to create/get an OpenGL context from your window.
+        .build()
+        .unwrap();
+    let mut canvas = window.into_canvas()
+        .index(find_sdl_gl_driver().unwrap())
+        .build()
+        .unwrap();
+
+    canvas.set_logical_size(256,240);
+    let creator = canvas.texture_creator();
+    let mut texture = creator
+       .create_texture_target(sdl2::pixels::PixelFormatEnum::RGB24, 256, 240).unwrap();
+
     let dk = read_iNES("dk.nes".to_string()).expect("Read Error");
     let mut nes = Console::new(dk);
 
@@ -314,16 +342,16 @@ fn main() {
             if nes.CPU.pause == 0 {
                 //println!("{:?}", nes.CPU);
                 let temp = InstructionToString(&mut nes, opcode);
-                println!("{} {:} ${:X}: {:02X} {:02X} {:02X} - {}", nes.cycles/12, nes.CPU, pc, opcode, opcode2, opcode3, temp);
+                //println!("{} {:} ${:X}: {:02X} {:02X} {:02X} - {}", nes.cycles/12, nes.CPU, pc, opcode, opcode2, opcode3, temp);
                 //thread::sleep(time::Duration::from_millis(1));
             }
             opcodes::interpret_opcode(&mut nes, opcode);
         }
 
         if nes.cycles%4 == 0 {
-            ppu::stepPPU(&mut nes);
-            if nes.PPU.cycle == 0 {
-            println!("[{}]", nes.PPU.scanline);
+            ppu::stepPPU(&mut nes, &mut canvas, &mut texture);
+            if nes.PPU.cycle == 0 && nes.PPU.scanline == 0 {
+            //println!("[{}]", nes.PPU.scanline);
             }
         }
 

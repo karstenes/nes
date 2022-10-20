@@ -90,7 +90,7 @@ fn readPPU(ppu: &mut PPU, index: usize) -> u8 {
             temp
         }
         _ => {
-            panic!("bad PPU memory location");
+            panic!("bad PPU memory location: {:02X}", index);
         }
     }
 }
