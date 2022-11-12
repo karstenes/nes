@@ -14,6 +14,13 @@ static OPNAMES: &[&str] = &["BRK", "ORA", "STP", "SLO", "NOP", "ORA", "ASL", "SL
 
 use sdl2;
 
+
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::EventPump;
+
 use std::{io::Read, time, thread, iter::Inspect};
 
 mod mapper;
@@ -69,7 +76,7 @@ impl std::fmt::Display for CPU {
         let mut p = "".to_string();
         p.push(if self.negative {'N'} else {'n'});
         p.push(if self.overflow {'V'} else {'v'});
-        p.push('S');
+        p.push('s');
         p.push(if self.break_cmd {'B'} else {'b'});
         p.push(if self.decimal {'D'} else {'d'});
         p.push(if self.interupt_disable {'I'} else {'i'});
@@ -123,7 +130,7 @@ impl Console {
     pub fn new(game: iNES) -> Console {
         Console{
         CPU: CPU::new(),
-        PPU: PPU::new(),
+        PPU: PPU::new(game.CHR.clone()),
         APU: APU::new(),
         Memory: memory::Memory::new(),
         Game: game,
@@ -296,7 +303,11 @@ fn InstructionToString(console: &mut Console, opcode: u8) -> String {
     if addr == 0 {
         return OPNAMES[opcode as usize].to_string()
     }
-    format!("{} ${:04X}",OPNAMES[opcode as usize], addr)
+    if addr < 0x100 {
+        format!("{} ${:02X}",OPNAMES[opcode as usize], addr)
+    } else {
+        format!("{} ${:04X}",OPNAMES[opcode as usize], addr)
+    }
 }
 
 fn find_sdl_gl_driver() -> Option<u32> {
@@ -311,7 +322,7 @@ fn find_sdl_gl_driver() -> Option<u32> {
 fn main() {  
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
-    let window = video_subsystem.window("Window", 800, 600)
+    let window = video_subsystem.window("Window", 640, 600)
         .opengl() // this line DOES NOT enable opengl, but allows you to create/get an OpenGL context from your window.
         .build()
         .unwrap();
@@ -320,7 +331,8 @@ fn main() {
         .build()
         .unwrap();
 
-    canvas.set_logical_size(256,240);
+    let mut event_pump = sdl_context.event_pump().unwrap();
+    canvas.set_scale(10.0, 10.0).unwrap();
     let creator = canvas.texture_creator();
     let mut texture = creator
        .create_texture_target(sdl2::pixels::PixelFormatEnum::RGB24, 256, 240).unwrap();
@@ -331,6 +343,7 @@ fn main() {
     println!("Start Vector 0x{:x}", memory::read16(&mut nes, 0xFFFC));
     nes.CPU.PC = memory::read16(&mut nes, 0xFFFC);
     
+    let mut icount = 0;
     //println!("{:?}", nes.Game.PGR[0..16].as_ref());
     loop {
         let pc = nes.CPU.PC;
@@ -338,23 +351,62 @@ fn main() {
         let opcode2 = memory::read(&mut nes, pc+1);
         let opcode3 = memory::read(&mut nes, pc+2);
         
-        if nes.cycles%12 == 0 {
+        if nes.cycles%3 == 0 && !nes.PPU.oam_transfer {
+            
             if nes.CPU.pause == 0 {
+                //println!("{:04X}", memory::read16(&mut nes, 0xFFFA));
                 //println!("{:?}", nes.CPU);
                 let temp = InstructionToString(&mut nes, opcode);
-                //println!("{} {:} ${:X}: {:02X} {:02X} {:02X} - {}", nes.cycles/12, nes.CPU, pc, opcode, opcode2, opcode3, temp);
+                println!("{} {:} {:04X} - {}", icount, nes.CPU, pc, temp);
+                icount += 1;
                 //thread::sleep(time::Duration::from_millis(1));
             }
             opcodes::interpret_opcode(&mut nes, opcode);
+            if nes.PPU.nmi_enable && nes.PPU.nmi_occured && nes.PPU.scanline == 241 && nes.PPU.cycle == 2 {
+                let index = nes.CPU.SP as u16 | 0x100;
+                let pc = nes.CPU.PC;
+                memory::write(&mut nes, index, ((pc & 0xFF00) >> 8 ) as u8);
+                nes.CPU.SP -= 1;
+                let index = nes.CPU.SP as u16 | 0x100;
+                memory::write(&mut nes, index, (pc & 0x00FF) as u8 + 2);
+                nes.CPU.SP -= 1;
+
+
+                let mut p: u8 = 0x00;
+                p |= nes.CPU.carry as u8;
+                p |= (nes.CPU.zero as u8) << 1;
+                p |= (nes.CPU.interupt_disable as u8) << 2;
+                p |= (nes.CPU.decimal as u8) << 3;
+                p |= (nes.CPU.break_cmd as u8) << 4;
+                p |= (nes.CPU.overflow as u8) << 6;
+                p |= (nes.CPU.negative as u8) << 7;
+
+                let index = nes.CPU.SP as u16 | 0x100;
+                memory::write(&mut nes, index, p);
+                nes.CPU.SP -= 1;
+
+                nes.CPU.interupt_disable = true;
+                
+                nes.CPU.PC = memory::read16(&mut nes, 0xFFFA);
+            } 
         }
 
-        if nes.cycles%4 == 0 {
+        //if nes.cycles%4 == 0 {
             ppu::stepPPU(&mut nes, &mut canvas, &mut texture);
             if nes.PPU.cycle == 0 && nes.PPU.scanline == 0 {
             //println!("[{}]", nes.PPU.scanline);
             }
-        }
-
+        //}
+        for event in event_pump.poll_iter() {
+            match event {
+              Event::Quit { .. }
+              | Event::KeyDown {
+                  keycode: Some(Keycode::Escape),
+                  ..
+              } => std::process::exit(0),
+              _ => { /* do nothing */ }
+            }
+         }
         nes.cycles += 1
     }    
 }

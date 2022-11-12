@@ -41,9 +41,16 @@ impl image {
 pub struct PPU {
     frame: image,
 
+    pub patterntable0: Vec<u8>,
+    pub patterntable1: Vec<u8>,
+    pub nametable0: Vec<u8>,
+    pub nametable1: Vec<u8>,
+    pub nametable2: Vec<u8>,
+    pub nametable3: Vec<u8>,
     pub palette: Vec<u8>,
-    pub nametable: Vec<u8>,
     pub oam: Vec<u8>,
+
+    pub oam_transfer: bool,
 
     nametablebyte: u8,
 
@@ -67,32 +74,48 @@ pub struct PPU {
     pub bg_left_column_enable: bool,
     pub grayscale: bool,
 
-    // PPUSTATUS  read 0x2002
+    // P``TATUS  read 0x2002
     pub vblank: bool,
     pub s0_hit: bool,
     pub sprite_overflow: bool,
 
     pub oamaddr: usize,
+    oamdmaaddr: usize,
+    pub oamdmapage: u8,
 
+    pub scroll_lowwrite: bool,
+    pub addr_lowwrite: bool,
 
     // regs
+    pub scroll: u16,
+    pub addr: u16,
+
     pub v: u16,
     pub t: u16,
     pub x: u8,
     pub w: bool,
 
     pub scanline: usize,
-    pub cycle: usize
+    pub cycle: usize,
+
+    pub nmi_occured: bool
 }
 
 impl PPU {
-    pub fn new() -> Self {
-        PPU {
+    pub fn new(chr: Vec<u8>) -> Self {
+        let mut ppu = PPU {
             frame: image::new(256, 240),
 
-            palette: vec![],
-            nametable: vec![],
-            oam: vec![],
+            patterntable0: vec![0; 0x1000],
+            patterntable1: vec![0; 0x1000],
+            nametable0: vec![0; 0x400],
+            nametable1: vec![0; 0x400],
+            nametable2: vec![0; 0x400],
+            nametable3: vec![0; 0x400],
+            palette: vec![0; 0x20],
+            oam: vec![0; 256],
+
+            oam_transfer: false,
 
             nametablebyte: 0,
 
@@ -121,9 +144,16 @@ impl PPU {
             sprite_overflow: false,
 
             oamaddr: 0,
+            oamdmaaddr: 0,
+            oamdmapage: 0,
 
+            scroll_lowwrite: false,
+            addr_lowwrite: false,
 
             // regs
+            scroll: 0,
+            addr: 0,
+
             v: 0,
             t: 0,
             x: 0,
@@ -131,19 +161,37 @@ impl PPU {
 
             scanline: 0,
             cycle: 0,
-        }
+
+            nmi_occured: false
+        };
+        ppu.patterntable0.copy_from_slice(&chr[0..0x1000]);
+        ppu.patterntable1.copy_from_slice(&chr[0x1000..0x2000]);
+        ppu
     }
 }
 
 pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut Texture) {
     let scanline = console.PPU.scanline;
     let cycle = console.PPU.cycle;
+    
+
+    if console.PPU.oam_transfer {
+        let newdata = memory::read(console, (((console.PPU.oamdmapage as u16)&0x00FF)<<8) | console.PPU.oamdmaaddr as u16);
+        console.PPU.oam[console.PPU.oamdmaaddr] = newdata;
+        //println!("OAM DMA tranfer of {:02X} from {:04X} to {:02X}", newdata, (((console.PPU.oamdmapage as u16)&0x00FF)<<8) | console.PPU.oamdmaaddr as u16, console.PPU.oamdmaaddr);
+        console.PPU.oamdmaaddr += 1;
+        if console.PPU.oamdmaaddr > 0xFF {
+            console.PPU.oam_transfer = false;
+            console.PPU.oamdmaaddr = 0;
+        }
+    }
+
     match scanline {
         line if line == 261 => {
             match cycle {
                 cycle if cycle == 0 => {
-                    canvas.copy(&Texture, None, None);
-                    canvas.present();
+                    console.PPU.vblank = false;
+                    console.PPU.nmi_occured = false;
                 }
                 cycle if cycle < 257 => {
 
@@ -168,11 +216,22 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
                     
                 }
                 cycle if cycle < 257 => {
-                    let addr: u16 = (0x2000 + cycle/8 + line/8).try_into().unwrap();
-                    let char = memory::read(console, addr);
-                    println!("{:02X}", char);
-                    //let pixel = memory:read(console, char+)
 
+                    let addr: u16 = (0x2000 + cycle/8 + line/8).try_into().unwrap();
+                    let char = memory::readPPUADDR(&mut console.PPU, addr as usize);
+                    //println!("{:02X}", char);
+                    let pixellow = console.PPU.patterntable0[char as usize * 16 + line%8] >> ((cycle - 1) % 8);
+                    let pixelhigh = console.PPU.patterntable0[char as usize * 16 + line%8 + 8] >> ((cycle - 1) % 8);
+                    let value = ((pixelhigh & 0b1)<< 1) | (pixellow & 0b1);
+                    let rgb = match value {
+                        0 => SYSTEM_PALLETE[0x01],
+                        1 => SYSTEM_PALLETE[0x23],
+                        2 => SYSTEM_PALLETE[0x27],
+                        3 => SYSTEM_PALLETE[0x30],
+                        _ => panic!("can't be"),
+                    };
+                    //println!("Rendering x:{}, y:{}, color:{:?}", cycle-1, line, rgb);
+                    console.PPU.frame.write(cycle-1, line, rgb);
                 }
                 cycle if cycle < 321 => {
 
@@ -190,6 +249,12 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
         }
         line if line == 241 && cycle == 1 => {
             console.PPU.vblank = true;
+            console.PPU.nmi_occured = true;
+
+            //println!("rendering frame!");
+            Texture.update(None, &console.PPU.frame.data, 256*3).unwrap();
+            canvas.copy(&Texture, None, None).unwrap();
+            canvas.present();
         }
         line if line <= 260 => {
             // do nothing
@@ -202,7 +267,7 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
     if cycle < 340 {
         console.PPU.cycle += 1;
     } else {
-        if scanline < 260 {
+        if scanline < 261 {
             console.PPU.scanline += 1;
             console.PPU.cycle = 0;
         } else {

@@ -24,7 +24,11 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
         index if index < 0x4000 => {
             readPPU(&mut console.PPU, (index%0x8 + 0x2000) as usize)
         }
-        index if index < 0x4017 => {
+        index if index == 0x4016 || index == 0x4017 => {
+            println!("controlers unimplemented");
+            0
+        }
+        index if index < 0x4016 => {
             readAPU(&console.APU, index)
         }
         index if index < 0x6000 => {
@@ -33,6 +37,7 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
         index if (index >= 0x6000) => {
             mapper::read(&console.Game, index)
         }
+
         _ => {
             panic!("bad read addr: 0x{:x}", index);
         }
@@ -54,8 +59,17 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
         index if index < 0x2000 => {
             console.Memory.ram[(index%0x800) as usize] = data;
         }
+        index if index == 0x4016 || index == 0x4017 => {
+            println!("controlers unimplemented");
+        }
         index if index < 0x4000 => {
             writePPU(&mut console.PPU, (index%0x8 + 0x2000) as usize, data);
+        }
+        index if index == 0x4014 => {
+            writePPU(&mut console.PPU, index as usize, data);
+        }
+        index if index < 0x4016 => {
+            writeAPU(&mut console.APU, index, data);
         }
         index if (index >= 0x6000) => {
             mapper::write(&mut console.Game, index, data);
@@ -71,8 +85,49 @@ pub fn write16(console: &mut Console, index: u16, data: u16) {
     write(console, index, (data & 0x00FF) as u8);
 }
 
-fn readPPU(ppu: &mut PPU, index: usize) -> u8 {
+#[inline(always)]
+pub fn readPPUADDR(ppu: &mut PPU, index: usize) -> u8 {
     match index {
+        index if index < 0x1000 => {
+            ppu.patterntable0[index]
+        },
+        index if index < 0x2000 => {
+            ppu.patterntable1[(index % 0x1000)]
+        },
+        index if index < 0x2400 => {
+            ppu.nametable0[(index % 0x400)]
+        },
+        index if index < 0x2800 => {
+            ppu.nametable1[(index % 0x400)]
+        },
+        index if index < 0x2C00 => {
+            ppu.nametable2[(index % 0x400)]
+        },
+        index if index < 0x3000 => {
+            ppu.nametable3[(index % 0x400)]
+        }
+        index if index < 0x3400 => {
+            ppu.nametable0[(index % 0x400)]
+        },
+        index if index < 0x3800 => {
+            ppu.nametable1[(index % 0x400)]
+        },
+        index if index < 0x3C00 => {
+            ppu.nametable2[(index % 0x400)]
+        },
+        index if index < 0x3F00 => {
+            ppu.nametable3[(index % 0x400)]
+        }
+        index if index < 0x4000 => {
+            ppu.palette[(index % 0x20)]
+        },
+        _ => panic!("Bad PPU mem read addr ${:04X}", ppu.addr)
+    }
+}
+
+pub fn readPPU(ppu: &mut PPU, index: usize) -> u8 {
+    match index {
+        //index if index 
         0x2002 => {
             ppu.w = false;
             0u8 | ((ppu.vblank as u8) << 7) | ((ppu.s0_hit as u8) << 6) | ((ppu.sprite_overflow as u8) << 5)
@@ -81,19 +136,20 @@ fn readPPU(ppu: &mut PPU, index: usize) -> u8 {
             ppu.oam[ppu.oamaddr]
         }
         0x2007 => {
-            let temp = 0;
+            let data = readPPUADDR(ppu, index);
             if ppu.increment {
-                ppu.v += 32;
+                ppu.addr += 32;
             } else {
-                ppu.v += 1;
+                ppu.addr += 1;
             }
-            temp
+            data
         }
         _ => {
             panic!("bad PPU memory location: {:02X}", index);
         }
     }
 }
+
 
 
 #[inline(always)]
@@ -135,18 +191,47 @@ fn writePPUSCROLL(ppu: &mut PPU, data: u8) {
 }
 
 #[inline(always)]
-fn writePPUADDR(ppu: &mut PPU, data: u8) {
-    if !ppu.w {
-        ppu.t = (ppu.t & 0x80FF) | (((data & 0b00111111) as u16) << 8);
-        ppu.w = true;
-    } else {
-        ppu.t = (ppu.t & 0xFF00) | (data as u16);
-        ppu.v = ppu.t;
-        ppu.w = false;
+fn writePPUADDR(ppu: &mut PPU, data: u8, index: usize) {
+    //println!("PPUMEM Write ${:04X}: 0x{:02X}", index, data);
+    match index {
+        index if index < 0x1000 => {
+            ppu.patterntable0[index] = data;
+        },
+        index if index < 0x2000 => {
+            ppu.patterntable1[(index % 0x1000)] = data;
+        },
+        index if index < 0x2400 => {
+            ppu.nametable0[(index % 0x400)] = data;
+        },
+        index if index < 0x2800 => {
+            ppu.nametable1[(index % 0x400)] = data;
+        },
+        index if index < 0x2C00 => {
+            ppu.nametable2[(index % 0x400)] = data;
+        },
+        index if index < 0x3000 => {
+            ppu.nametable3[(index % 0x400)] = data;
+        }
+        index if index < 0x3400 => {
+            ppu.nametable0[(index % 0x400)] = data;
+        },
+        index if index < 0x3800 => {
+            ppu.nametable1[(index % 0x400)] = data;
+        },
+        index if index < 0x3C00 => {
+            ppu.nametable2[(index % 0x400)] = data;
+        },
+        index if index < 0x3F00 => {
+            ppu.nametable3[(index % 0x400)] = data;
+        }
+        index if index < 0x4000 => {
+            ppu.palette[(index % 0x20)] = data;
+        },
+        _ => panic!("Bad PPU mem write addr ${:04X}", ppu.addr)
     }
 }
 
-fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
+pub fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
     match index {
         0x2000 => {
             writePPUCTRL(ppu, data);
@@ -167,18 +252,27 @@ fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             writePPUSCROLL(ppu, data);
         },
         0x2006 => {
-            writePPUADDR(ppu, data);
+            if ppu.addr_lowwrite {
+                ppu.addr = (ppu.addr & 0xFF00) | data as u16;
+            } else {
+                ppu.addr = (ppu.addr & 0x00FF) | ((data as u16) << 8);
+            }
+            ppu.addr = ppu.addr % 0x4000;
+            ppu.addr_lowwrite = !ppu.addr_lowwrite;
         },
         0x2007 => {
+            if ppu.addr < 0x4000 {writePPUADDR(ppu, data, ppu.addr as usize)};
             if ppu.increment {
-                ppu.v += 32;
+                ppu.addr += 32;
             } else {
-                ppu.v += 1;
+                ppu.addr += 1;
             }
-            writePPUADDR(ppu, data);
+        }
+        0x4014 => {
+            ppu.oam_transfer = true;
         }
         _ => {
-            panic!("bad ppu write addr")
+            panic!("bad ppu write addr ${:04X}", index)
         }
     }
 }

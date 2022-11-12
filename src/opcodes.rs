@@ -533,7 +533,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.zero = console.CPU.A == 0;
         }
         0x9A => { // TXS
-            console.CPU.SP = console.CPU.X;
+            console.CPU.SP = console.CPU.X+1;
         }
         0x9C => { // SHY
             panic!("bad instruction (SHY)");
