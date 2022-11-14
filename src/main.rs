@@ -357,7 +357,7 @@ fn main() {
                 //println!("{:04X}", memory::read16(&mut nes, 0xFFFA));
                 //println!("{:?}", nes.CPU);
                 let temp = InstructionToString(&mut nes, opcode);
-                println!("{} {:} {:04X} - {}", icount, nes.CPU, pc, temp);
+                println!("{} {:} {:04X}: {}", icount, nes.CPU, pc, temp);
                 icount += 1;
                 //thread::sleep(time::Duration::from_millis(1));
             }
