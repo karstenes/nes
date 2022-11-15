@@ -19,6 +19,7 @@ impl Memory {
 pub fn read(console: &mut Console, index: u16) -> u8 {
         match index {
         index if index < 0x2000 => {
+            if index == 0xFD {println!("Read from 0xFD: {:02X}", console.Memory.ram[(index%0x800) as usize])};
             console.Memory.ram[(index%0x800) as usize]
         }
         index if index < 0x4000 => {
@@ -57,6 +58,7 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
 
     match index {
         index if index < 0x2000 => {
+            if index == 0xFD {println!("Write to 0xFD: {:02X}", data)};
             console.Memory.ram[(index%0x800) as usize] = data;
         }
         index if index == 0x4016 || index == 0x4017 => {
@@ -130,7 +132,9 @@ pub fn readPPU(ppu: &mut PPU, index: usize) -> u8 {
         //index if index 
         0x2002 => {
             ppu.w = false;
-            0u8 | ((ppu.vblank as u8) << 7) | ((ppu.s0_hit as u8) << 6) | ((ppu.sprite_overflow as u8) << 5)
+            let val = 0u8 | ((ppu.vblank as u8) << 7) | ((ppu.s0_hit as u8) << 6) | ((ppu.sprite_overflow as u8) << 5);
+            ppu.vblank = false;
+            val
         }
         0x2004 => {
             ppu.oam[ppu.oamaddr]

@@ -17,6 +17,7 @@ use sdl2;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::libc::CLOCK_REALTIME_ALARM;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::EventPump;
@@ -344,6 +345,7 @@ fn main() {
     nes.CPU.PC = memory::read16(&mut nes, 0xFFFC);
     
     let mut icount = 0;
+    let mut calllevel = 0;
     //println!("{:?}", nes.Game.PGR[0..16].as_ref());
     loop {
         let pc = nes.CPU.PC;
@@ -357,12 +359,17 @@ fn main() {
                 //println!("{:04X}", memory::read16(&mut nes, 0xFFFA));
                 //println!("{:?}", nes.CPU);
                 let temp = InstructionToString(&mut nes, opcode);
-                println!("{} {:} {:04X}: {}", icount, nes.CPU, pc, temp);
+                println!("{} {:}{:}{:04X}: {}", icount, nes.CPU, " ".repeat(calllevel+1), pc, temp);
+                if OPNAMES[opcode as usize] == "JSR" || OPNAMES[opcode as usize] == "BRK" {
+                    calllevel += 1;
+                }
+                if OPNAMES[opcode as usize] == "RTI" || OPNAMES[opcode as usize] == "RTS" {calllevel -= 1};
                 icount += 1;
                 //thread::sleep(time::Duration::from_millis(1));
             }
             opcodes::interpret_opcode(&mut nes, opcode);
             if nes.PPU.nmi_enable && nes.PPU.nmi_occured && nes.PPU.scanline == 241 && nes.PPU.cycle == 2 {
+                calllevel += 1;
                 let index = nes.CPU.SP as u16 | 0x100;
                 let pc = nes.CPU.PC;
                 memory::write(&mut nes, index, ((pc & 0xFF00) >> 8 ) as u8);

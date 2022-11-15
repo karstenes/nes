@@ -139,7 +139,7 @@ impl PPU {
             grayscale: false,
 
             // PPUSTATUS  read 0x2002
-            vblank: false,
+            vblank: true,
             s0_hit: false,
             sprite_overflow: false,
 
