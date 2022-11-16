@@ -181,7 +181,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
     macro_rules! push{
         ($data:expr)=>{
             {
-            memory::write(console, (console.CPU.SP as u16)|0x100, $data);
+            memory::write(console, ((console.CPU.SP-1) as u16)|0x100, $data);
             console.CPU.SP -= 1;
             }
         }
@@ -191,7 +191,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         ()=>{
             {
             console.CPU.SP += 1;
-            memory::read(console, (console.CPU.SP as u16)|0x100)
+            memory::read(console, ((console.CPU.SP-1) as u16)|0x100)
             }
         }
     }
@@ -268,7 +268,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
    macro_rules! ADC{
         ()=>{
         let value = memory::read(console, addr);
-        let temp = console.CPU.A as u16 + value as u16;
+        let temp = console.CPU.A as u16 + value as u16 + console.CPU.carry as u16;
         console.CPU.A = (temp & 0x00FF) as u8;
         console.CPU.carry = temp > 0xFF;
         console.CPU.negative = (temp & 0x80) > 0;
@@ -364,6 +364,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.carry = false;
         }
         0x20 => { // JSR
+            //println!("Pushing {:04X} to the stack", console.CPU.PC);
             push!(((console.CPU.PC & 0xFF00) >> 8) as u8);
             push!((console.CPU.PC & 0x00FF) as u8 + 2);
             console.CPU.PC = addr;
@@ -460,6 +461,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
         0x60 => { // RTS
             let mut temp = pull!() as u16;
             temp |= (pull!() as u16) << 8;
+            //println!("Returning from subroutine to {:04X}", temp);
             console.CPU.PC = temp;
         }
         0x61 | 0x65 | 0x69 | 0x6D | 0x71 | 0x75 | 0x79 | 0x7D => {

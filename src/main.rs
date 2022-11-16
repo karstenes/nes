@@ -360,6 +360,7 @@ fn main() {
                 //println!("{:?}", nes.CPU);
                 let temp = InstructionToString(&mut nes, opcode);
                 println!("{} {:}{:}{:04X}: {}", icount, nes.CPU, " ".repeat(calllevel+1), pc, temp);
+                //println!("{:02X} {:02X}", memory::read(&mut nes, 0x1FF), memory::read(&mut nes, 0x1FE));
                 if OPNAMES[opcode as usize] == "JSR" || OPNAMES[opcode as usize] == "BRK" {
                     calllevel += 1;
                 }
@@ -369,14 +370,18 @@ fn main() {
             }
             opcodes::interpret_opcode(&mut nes, opcode);
             if nes.PPU.nmi_enable && nes.PPU.nmi_occured && nes.PPU.scanline == 241 && nes.PPU.cycle == 2 {
+                println!("Next instruction: {:04X}",nes.CPU.PC);
                 calllevel += 1;
-                let index = nes.CPU.SP as u16 | 0x100;
+                let index = (nes.CPU.SP-1) as u16 | 0x100;
                 let pc = nes.CPU.PC;
                 memory::write(&mut nes, index, ((pc & 0xFF00) >> 8 ) as u8);
                 nes.CPU.SP -= 1;
-                let index = nes.CPU.SP as u16 | 0x100;
-                memory::write(&mut nes, index, (pc & 0x00FF) as u8 + 2);
+                println!("Pushed {:02X} at {:04X}", ((pc & 0xFF00) >> 8 ) as u8, index);
+                let index = (nes.CPU.SP-1) as u16 | 0x100;
+                memory::write(&mut nes, index, (pc & 0x00FF) as u8);
                 nes.CPU.SP -= 1;
+                println!("Pushed {:02X} at {:04X}", (pc & 0x00FF) as u8, index);
+
 
 
                 let mut p: u8 = 0x00;
@@ -388,9 +393,10 @@ fn main() {
                 p |= (nes.CPU.overflow as u8) << 6;
                 p |= (nes.CPU.negative as u8) << 7;
 
-                let index = nes.CPU.SP as u16 | 0x100;
+                let index = (nes.CPU.SP-1) as u16 | 0x100;
                 memory::write(&mut nes, index, p);
                 nes.CPU.SP -= 1;
+                println!("Pushed {:02X} at {:04X}", p, index);
 
                 nes.CPU.interupt_disable = true;
                 
