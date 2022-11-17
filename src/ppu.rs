@@ -185,7 +185,6 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
             console.PPU.oamdmaaddr = 0;
         }
     }
-
     match scanline {
         line if line == 261 => {
             match cycle {
@@ -217,11 +216,19 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
                 }
                 cycle if cycle < 257 => {
 
-                    let addr: u16 = (0x2000 + cycle/8 + line/8).try_into().unwrap();
-                    let char = memory::readPPUADDR(&mut console.PPU, addr as usize);
-                    //println!("{:02X}", char);
-                    let pixellow = console.PPU.patterntable0[char as usize * 16 + line%8] >> ((cycle - 1) % 8);
-                    let pixelhigh = console.PPU.patterntable0[char as usize * 16 + line%8 + 8] >> ((cycle - 1) % 8);
+                    //let addr: u16 = (0x2000 + cycle/8 + line/8).try_into().unwrap();
+                    // let char = memory::readPPUADDR(&mut console.PPU, addr as usize);
+                    let tile = console.PPU.nametable0[cycle/8 + (scanline/8)*32];
+                    //println!("line: {}, cycle: {}, {:02X} at {:X}", scanline, cycle, char, cycle/8 + scanline*4);
+                    let char = &console.PPU.patterntable0[(tile * 16) as usize..=(tile * 16 + 15) as usize];
+                    // let pixellow = console.PPU.patterntable0[(tile as usize * 16) + line%8] >> ((cycle - 1) % 8);
+                    // let pixelhigh = console.PPU.patterntable0[(tile as usize * 16) + 8 + line%8] >> ((cycle - 1) % 8);
+                    let low = char[line%8];
+                    let high = char[line%8 + 8];
+
+                    let pixellow = low>>((cycle-1)%8);
+                    let pixelhigh = high>>((cycle-1)%8);
+
                     let value = ((pixelhigh & 0b1)<< 1) | (pixellow & 0b1);
                     let rgb = match value {
                         0 => SYSTEM_PALLETE[0x01],
@@ -252,6 +259,8 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
             console.PPU.nmi_occured = true;
 
             //println!("rendering frame!");
+            println!("{:?}", console.PPU.nametable0);
+            //println!("{:?}", console.PPU.frame.data);
             Texture.update(None, &console.PPU.frame.data, 256*3).unwrap();
             canvas.copy(&Texture, None, None).unwrap();
             canvas.present();

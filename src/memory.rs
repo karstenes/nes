@@ -196,7 +196,7 @@ fn writePPUSCROLL(ppu: &mut PPU, data: u8) {
 
 #[inline(always)]
 fn writePPUADDR(ppu: &mut PPU, data: u8, index: usize) {
-    //println!("PPUMEM Write ${:04X}: 0x{:02X}", index, data);
+    println!("PPUMEM Write ${:04X}: 0x{:02X}", index, data);
     match index {
         index if index < 0x1000 => {
             ppu.patterntable0[index] = data;
@@ -265,6 +265,7 @@ pub fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             ppu.addr_lowwrite = !ppu.addr_lowwrite;
         },
         0x2007 => {
+            println!("Writing {:02X} to PPU addr {:04X}", data, ppu.addr);
             if ppu.addr < 0x4000 {writePPUADDR(ppu, data, ppu.addr as usize)};
             if ppu.increment {
                 ppu.addr += 32;
