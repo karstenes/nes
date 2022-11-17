@@ -19,14 +19,13 @@ impl Memory {
 pub fn read(console: &mut Console, index: u16) -> u8 {
         match index {
         index if index < 0x2000 => {
-            if index == 0xFD {println!("Read from 0xFD: {:02X}", console.Memory.ram[(index%0x800) as usize])};
             console.Memory.ram[(index%0x800) as usize]
         }
         index if index < 0x4000 => {
             readPPU(&mut console.PPU, (index%0x8 + 0x2000) as usize)
         }
         index if index == 0x4016 || index == 0x4017 => {
-            println!("controlers unimplemented");
+            //println!("controlers unimplemented");
             0
         }
         index if index < 0x4016 => {
@@ -58,11 +57,10 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
 
     match index {
         index if index < 0x2000 => {
-            if index == 0xFD {println!("Write to 0xFD: {:02X}", data)};
             console.Memory.ram[(index%0x800) as usize] = data;
         }
         index if index == 0x4016 || index == 0x4017 => {
-            println!("controlers unimplemented");
+            //println!("controlers unimplemented");
         }
         index if index < 0x4000 => {
             writePPU(&mut console.PPU, (index%0x8 + 0x2000) as usize, data);
@@ -196,7 +194,7 @@ fn writePPUSCROLL(ppu: &mut PPU, data: u8) {
 
 #[inline(always)]
 fn writePPUADDR(ppu: &mut PPU, data: u8, index: usize) {
-    println!("PPUMEM Write ${:04X}: 0x{:02X}", index, data);
+    //println!("PPUMEM Write ${:04X}: 0x{:02X}", index, data);
     match index {
         index if index < 0x1000 => {
             ppu.patterntable0[index] = data;
@@ -265,7 +263,7 @@ pub fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             ppu.addr_lowwrite = !ppu.addr_lowwrite;
         },
         0x2007 => {
-            println!("Writing {:02X} to PPU addr {:04X}", data, ppu.addr);
+            //println!("Writing {:02X} to PPU addr {:04X}", data, ppu.addr);
             if ppu.addr < 0x4000 {writePPUADDR(ppu, data, ppu.addr as usize)};
             if ppu.increment {
                 ppu.addr += 32;
