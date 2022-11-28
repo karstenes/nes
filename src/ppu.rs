@@ -49,6 +49,7 @@ pub struct PPU {
     pub nametable3: Vec<u8>,
     pub palette: Vec<u8>,
     pub oam: Vec<u8>,
+    pub oam2: Vec<u8>,
 
     pub oam_transfer: bool,
 
@@ -114,6 +115,7 @@ impl PPU {
             nametable3: vec![0; 0x400],
             palette: vec![0; 0x20],
             oam: vec![0; 256],
+            oam2: vec![0; 32],
 
             oam_transfer: false,
 
@@ -216,40 +218,43 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
                 }
                 cycle if cycle < 257 => {
 
-                    //let addr: u16 = (0x2000 + cycle/8 + line/8).try_into().unwrap();
-                    // let char = memory::readPPUADDR(&mut console.PPU, addr as usize);
-                    let tile: u16 = console.PPU.nametable0[cycle/8 + (scanline/8)*32] as u16;
-                    //println!("line: {}, cycle: {}, {:02X} at {:X}", scanline, cycle, tile, cycle/8 + scanline*4);
-                    //println!("{:04X}", tile*16);
-                    let char = &console.PPU.patterntable1[(tile * 16) as usize..=(tile * 16 + 15) as usize];
-                    // let pixellow = console.PPU.patterntable0[(tile as usize * 16) + line%8] >> ((cycle - 1) % 8);
-                    // let pixelhigh = console.PPU.patterntable0[(tile as usize * 16) + 8 + line%8] >> ((cycle - 1) % 8);
-                    let low = char[line%8];
-                    let high = char[line%8 + 8];
-                    
-                    //println!("{:X} {:X}", low, high);
+                    if console.PPU.bg_enable {
+                        //let addr: u16 = (0x2000 + cycle/8 + line/8).try_into().unwrap();
+                        // let char = memory::readPPUADDR(&mut console.PPU, addr as usize);
+                        let tile: u16 = console.PPU.nametable0[cycle/8 + (scanline/8)*32] as u16;
+                        //println!("line: {}, cycle: {}, {:02X} at {:X}", scanline, cycle, tile, cycle/8 + scanline*4);
+                        //println!("{:04X}", tile*16);
+                        let char = &console.PPU.patterntable1[(tile * 16) as usize..=(tile * 16 + 15) as usize];
+                        // let pixellow = console.PPU.patterntable0[(tile as usize * 16) + line%8] >> ((cycle - 1) % 8);
+                        // let pixelhigh = console.PPU.patterntable0[(tile as usize * 16) + 8 + line%8] >> ((cycle - 1) % 8);
+                        let low = char[line%8];
+                        let high = char[line%8 + 8];
+                        
+                        //println!("{:X} {:X}", low, high);
 
-                    let pixellow = low>>(7-(cycle)%8);
-                    let pixelhigh = high>>(7-(cycle)%8);
+                        let pixellow = low>>(7-(cycle)%8);
+                        let pixelhigh = high>>(7-(cycle)%8);
 
-                    let value = ((pixelhigh & 0b1)<< 1) | (pixellow & 0b1);
+                        let value = ((pixelhigh & 0b1)<< 1) | (pixellow & 0b1);
 
-                    let region = console.PPU.nametable0[(0x3C0 + ((cycle-1)/32) + (scanline)/32) as usize];
+                        let region = console.PPU.nametable0[(0x3C0 + ((cycle-1)/32) + (scanline)/32) as usize];
 
-                    let palette = region>>((((cycle-1)%32)/16)*2 + ((scanline%32)/16)*2) & 0b11;
+                        let palette = region>>((((cycle-1)%32)/16)*2 + ((scanline%32)/16)*2) & 0b11;
 
-                    let rgb = match value {
-                        0 => SYSTEM_PALLETE[console.PPU.palette[0] as usize],
-                        1 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
-                        2 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
-                        3 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
-                        _ => panic!("can't be"),
-                    };
-                    //println!("Rendering x:{}, y:{}, color:{:?}", cycle-1, line, rgb);
-                    console.PPU.frame.write(cycle-1, line, rgb);
+                        let rgb = match value {
+                            0 => SYSTEM_PALLETE[console.PPU.palette[0] as usize],
+                            1 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
+                            2 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
+                            3 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
+                            _ => panic!("can't be"),
+                        };
+                        //println!("Rendering x:{}, y:{}, color:{:?}", cycle-1, line, rgb)
+
+                        console.PPU.frame.write(cycle-1, line, rgb);    
+                    }
                 }
                 cycle if cycle < 321 => {
-
+                    
                 }
                 cycle if cycle < 337 => {
 
@@ -263,6 +268,61 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
             };
         }
         line if line == 241 && cycle == 1 => {
+            for n in (0..256).step_by(4) {
+                let oam = &console.PPU.oam;
+                if (oam[n+1] == 0xFF) && (oam[n+2] == 0xFF) && (oam[n+3] == 0xFF) {continue};
+                if (oam[n+1] == 0x00) && (oam[n+2] == 0x00) && (oam[n+3] == 0x00) {continue};
+
+                let sprite_x = oam[n+3];
+                let sprite_y = oam[n];
+                if sprite_y > 240 {continue};
+                let bank = oam[n+1] & 0b1;
+                let tile = (oam[n+1] & 0b11111110) >> 1;
+                let palette = oam[n+2] & 0b11;
+                let hflip = (oam[n+2] & 0b01000000) > 0;
+                let vflip = (oam[n+2] & 0b10000000) > 0;
+
+                let char = if bank == 0 {
+                    &console.PPU.patterntable0[(tile * 16) as usize..=(tile * 16 + 15) as usize]
+
+                } else {
+                    &console.PPU.patterntable1[(tile * 16) as usize..=(tile * 16 + 15) as usize]
+
+                };
+                println!("Rendering sprite {} at {}, {}", n/4, sprite_x, sprite_y);
+                for y in 0..8 {
+                    let mut low = char[y];
+                    let mut high = char[y+8];
+                    'xrender: for x in 0..8_usize {
+                        let value = (0b1 & low) << 1 | (0b1&high);
+                        low >>= 1;
+                        high >>= 1;
+                        
+                        let rgb = match value {
+                            0 => continue 'xrender,
+                            1 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
+                            2 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
+                            3 => SYSTEM_PALLETE[console.PPU.palette[(0x00|(palette<<2)|value) as usize] as usize],
+                            _ => panic!("can't be"),
+                        };
+
+                        let mut flipx = x;
+                        let mut flipy = y;
+                        if hflip {
+                            flipx = 7-x;
+                        }
+                        if vflip {
+                            flipy = 7-y;
+                        }
+                        
+                        console.PPU.frame.write((sprite_x as usize) + flipx, (sprite_y as usize)+flipy, rgb);
+                    }
+                }
+            }
+
+
+
+
             console.PPU.vblank = true;
             console.PPU.nmi_occured = true;
 
