@@ -5,3 +5,5 @@
 *.nes
 *.log
 *.txt
+*.exe
+*.dll

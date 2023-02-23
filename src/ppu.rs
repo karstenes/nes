@@ -40,6 +40,7 @@ impl image {
 #[derive(Debug)]
 pub struct PPU {
     frame: image,
+    ptframe: image,
 
     pub patterntable0: Vec<u8>,
     pub patterntable1: Vec<u8>,
@@ -106,6 +107,7 @@ impl PPU {
     pub fn new(chr: Vec<u8>) -> Self {
         let mut ppu = PPU {
             frame: image::new(256, 240),
+            ptframe: image::new(256,240),
 
             patterntable0: vec![0; 0x1000],
             patterntable1: vec![0; 0x1000],
@@ -172,7 +174,7 @@ impl PPU {
     }
 }
 
-pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut Texture) {
+pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut Texture, ntcanvas: &mut Canvas<Window>, ntTexture: &mut Texture) {
     let scanline = console.PPU.scanline;
     let cycle = console.PPU.cycle;
     
@@ -268,7 +270,29 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
             };
         }
         line if line == 241 && cycle == 1 => {
-            for n in (0..256).step_by(4) {
+            
+            for nt in 0..256 {
+                let tile = &console.PPU.patterntable0[(nt * 16) as usize..=(nt * 16 + 15) as usize];          
+                for y in 0..=7 {
+                    let mut upper = tile[y];
+                    let mut lower = tile[y + 8];
+                
+                    for x in (0..=7).rev() {
+                        let value = (1 & upper) << 1 | (1 & lower);
+                        upper = upper >> 1;
+                        lower = lower >> 1;
+                        let rgb = match value {
+                            0 => SYSTEM_PALLETE[console.PPU.palette[0] as usize],
+                            1 => SYSTEM_PALLETE[console.PPU.palette[1] as usize],
+                            2 => SYSTEM_PALLETE[console.PPU.palette[2] as usize],
+                            3 => SYSTEM_PALLETE[console.PPU.palette[3] as usize],
+                            _ => panic!("can't be"),
+                        };
+                        console.PPU.ptframe.write(x+((nt*8) % 256) as usize, y + 8*(nt/32) as usize, rgb);
+                    }
+                }
+            }
+            for n in (0..256).step_by(4).rev() {
                 let oam = &console.PPU.oam;
                 if (oam[n+1] == 0xFF) && (oam[n+2] == 0xFF) && (oam[n+3] == 0xFF) {continue};
                 if (oam[n+1] == 0x00) && (oam[n+2] == 0x00) && (oam[n+3] == 0x00) {continue};
@@ -277,19 +301,18 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
                 let sprite_y = oam[n];
                 if sprite_y > 240 {continue};
                 let bank = oam[n+1] & 0b1;
-                let tile = (oam[n+1] & 0b11111110) >> 1;
+                let tile = 0xA2;
                 let palette = oam[n+2] & 0b11;
                 let hflip = (oam[n+2] & 0b01000000) > 0;
                 let vflip = (oam[n+2] & 0b10000000) > 0;
 
-                let char = if bank == 0 {
+                let char = if bank == 1 {
                     &console.PPU.patterntable0[(tile * 16) as usize..=(tile * 16 + 15) as usize]
 
                 } else {
                     &console.PPU.patterntable1[(tile * 16) as usize..=(tile * 16 + 15) as usize]
 
                 };
-                println!("Rendering sprite {} at {}, {}", n/4, sprite_x, sprite_y);
                 for y in 0..8 {
                     let mut low = char[y];
                     let mut high = char[y+8];
@@ -331,6 +354,10 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
             Texture.update(None, &console.PPU.frame.data, 256*3).unwrap();
             canvas.copy(&Texture, None, None).unwrap();
             canvas.present();
+
+            ntTexture.update(None, &console.PPU.ptframe.data, 256*2).unwrap();
+            ntcanvas.copy(&ntTexture, None, None).unwrap();
+            ntcanvas.present();
         }
         line if line <= 260 => {
             // do nothing

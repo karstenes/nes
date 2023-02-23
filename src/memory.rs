@@ -272,6 +272,7 @@ pub fn writePPU(ppu: &mut PPU, index: usize, data: u8) {
             }
         }
         0x4014 => {
+            ppu.oamdmapage = data;
             ppu.oam_transfer = true;
         }
         _ => {

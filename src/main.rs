@@ -17,7 +17,7 @@ use sdl2;
 
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
-use sdl2::libc::CLOCK_REALTIME_ALARM;
+//use sdl2::libc::CLOCK_REALTIME_ALARM;
 use sdl2::pixels::Color;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::EventPump;
@@ -327,15 +327,29 @@ fn main() {
         .opengl() // this line DOES NOT enable opengl, but allows you to create/get an OpenGL context from your window.
         .build()
         .unwrap();
+    let ntwindow = video_subsystem.window("Window", 512, 480)
+    .opengl() // this line DOES NOT enable opengl, but allows you to create/get an OpenGL context from your window.
+    .build()
+    .unwrap();
+
     let mut canvas = window.into_canvas()
         .index(find_sdl_gl_driver().unwrap())
         .build()
         .unwrap();
+    let mut ntcanvas = ntwindow.into_canvas()
+    .index(find_sdl_gl_driver().unwrap())
+    .build()
+    .unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     canvas.set_scale(10.0, 10.0).unwrap();
+    ntcanvas.set_scale(10.0, 10.0).unwrap();
     let creator = canvas.texture_creator();
+    let ntcreator = ntcanvas.texture_creator();
     let mut texture = creator
+       .create_texture_target(sdl2::pixels::PixelFormatEnum::RGB24, 256, 240).unwrap();
+
+    let mut nttexture = ntcreator
        .create_texture_target(sdl2::pixels::PixelFormatEnum::RGB24, 256, 240).unwrap();
 
     let dk = read_iNES("dk.nes".to_string()).expect("Read Error");
@@ -405,7 +419,7 @@ fn main() {
         }
 
         //if nes.cycles%4 == 0 {
-            ppu::stepPPU(&mut nes, &mut canvas, &mut texture);
+            ppu::stepPPU(&mut nes, &mut canvas, &mut texture, &mut ntcanvas, &mut nttexture);
             if nes.PPU.cycle == 0 && nes.PPU.scanline == 0 {
             //println!("[{}]", nes.PPU.scanline);
             }
