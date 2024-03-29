@@ -1,3 +1,7 @@
+[profile.dev]
+opt-level = 0
+debug = true
+
 [package]
 name = "nes"
 version = "0.1.0"

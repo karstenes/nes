@@ -5,7 +5,7 @@ use apu::APU;
 
 #[derive(Debug)]
 pub struct Memory {
-    pub ram: Vec<u8>,
+    pub ram: Vec<u8>
 }
 
 impl Memory {
@@ -24,7 +24,13 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
         index if index < 0x4000 => {
             readPPU(&mut console.PPU, (index%0x8 + 0x2000) as usize)
         }
-        index if index == 0x4016 || index == 0x4017 => {
+        index if index == 0x4016 => {
+            println!("Controller read!");
+            let lsb = console.Controller1.shiftreg & 0x1;
+            console.Controller1.shiftreg >>= 1;
+            lsb
+        }
+        index if index == 0x4017 => {
             //println!("controlers unimplemented");
             0
         }
@@ -59,8 +65,12 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
         index if index < 0x2000 => {
             console.Memory.ram[(index%0x800) as usize] = data;
         }
-        index if index == 0x4016 || index == 0x4017 => {
-            //println!("controlers unimplemented");
+        index if index == 0x4016 => {
+            console.Strobe = (data & 0x01) == 0x01;
+            println!("Strobe = {:0}", console.Strobe)
+        }
+        index if index == 0x4017 => {
+            
         }
         index if index < 0x4000 => {
             writePPU(&mut console.PPU, (index%0x8 + 0x2000) as usize, data);

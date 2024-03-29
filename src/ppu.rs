@@ -174,7 +174,7 @@ impl PPU {
     }
 }
 
-pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut Texture, ntcanvas: &mut Canvas<Window>, ntTexture: &mut Texture) {
+pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut Texture, ntcanvas: &mut Canvas<Window>) {
     let scanline = console.PPU.scanline;
     let cycle = console.PPU.cycle;
     
@@ -355,9 +355,9 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
             canvas.copy(&Texture, None, None).unwrap();
             canvas.present();
 
-            ntTexture.update(None, &console.PPU.ptframe.data, 256*2).unwrap();
-            ntcanvas.copy(&ntTexture, None, None).unwrap();
-            ntcanvas.present();
+            // ntTexture.update(None, &console.PPU.ptframe.data, 256*2).unwrap();
+            // ntcanvas.copy(&ntTexture, None, None).unwrap();
+            // ntcanvas.present();
         }
         line if line <= 260 => {
             // do nothing

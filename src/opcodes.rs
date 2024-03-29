@@ -181,8 +181,8 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
     macro_rules! push{
         ($data:expr)=>{
             {
-            memory::write(console, ((console.CPU.SP-1) as u16)|0x100, $data);
-            console.CPU.SP -= 1;
+            memory::write(console, ((console.CPU.SP.wrapping_sub(1)) as u16)|0x100, $data);
+            console.CPU.SP = console.CPU.SP.wrapping_sub(1);
             }
         }
     }
@@ -190,8 +190,8 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
     macro_rules! pull {
         ()=>{
             {
-            console.CPU.SP += 1;
-            memory::read(console, ((console.CPU.SP-1) as u16)|0x100)
+            console.CPU.SP = console.CPU.SP.wrapping_add(1);
+            memory::read(console, ((console.CPU.SP.wrapping_sub(1)) as u16)|0x100)
             }
         }
     }
@@ -338,7 +338,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             
         }
         0x06 | 0x0A | 0x0E | 0x16 | 0x1E => { // ASL
-            if addr == 0 {
+            if opcode & 0x0F == 0x8 {
                 console.CPU.carry = (console.CPU.A & 0x80) != 0;
                 console.CPU.A <<= 1;
                 console.CPU.negative = (console.CPU.A & 0x80) != 0;
@@ -380,7 +380,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             console.CPU.overflow = (temp & 0x40) != 0;
         }
         0x26 | 0x2A | 0x2E | 0x36 | 0x3E => { // ROL
-            if addr == 0 {
+            if opcode & 0x0F == 0x8 {
                 if console.CPU.carry {
                     console.CPU.carry = (console.CPU.A & 0x80) != 0;
                     console.CPU.A <<= 1;
@@ -428,7 +428,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             EOR!();
         }
         0x46 | 0x4A | 0x4E | 0x56 | 0x5E => { // LSR
-            if addr == 0 {
+            if opcode & 0x0F == 0x8 {
                 console.CPU.carry = (console.CPU.A & 0x01) != 0;
                 console.CPU.A >>= 1;
                 console.CPU.negative = false;
@@ -468,7 +468,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             ADC!();
         }
         0x66 | 0x6A | 0x6E | 0x76 | 0x7E => { // ROR
-            if addr == 0 {
+            if opcode & 0x0F == 0x8  {
                 if console.CPU.carry {
                     console.CPU.carry = (console.CPU.A & 0x01) != 0;
                     console.CPU.A = (console.CPU.A >> 1) + 0x80;
