@@ -174,7 +174,7 @@ impl PPU {
     }
 }
 
-pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut Texture, ntcanvas: &mut Canvas<Window>) {
+pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut Texture) {
     let scanline = console.PPU.scanline;
     let cycle = console.PPU.cycle;
     
@@ -345,7 +345,7 @@ pub fn stepPPU(console: &mut Console, canvas: &mut Canvas<Window>, Texture: &mut
 
 
 
-
+            // println!("Scanline!");
             console.PPU.vblank = true;
             console.PPU.nmi_occured = true;
 

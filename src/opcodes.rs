@@ -338,7 +338,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             
         }
         0x06 | 0x0A | 0x0E | 0x16 | 0x1E => { // ASL
-            if opcode & 0x0F == 0x8 {
+            if opcode == 0x0A {
                 console.CPU.carry = (console.CPU.A & 0x80) != 0;
                 console.CPU.A <<= 1;
                 console.CPU.negative = (console.CPU.A & 0x80) != 0;
@@ -374,13 +374,13 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             AND!();
         }
         0x24 | 0x2C => { // BIT
-            let temp = console.CPU.A & memory::read(console, addr);
-            console.CPU.zero = temp == 0;
+            let temp = memory::read(console, addr);
+            console.CPU.zero = console.CPU.A & temp == 0;
             console.CPU.negative = (temp & 0x80) != 0;
             console.CPU.overflow = (temp & 0x40) != 0;
         }
         0x26 | 0x2A | 0x2E | 0x36 | 0x3E => { // ROL
-            if opcode & 0x0F == 0x8 {
+            if opcode == 0x2A {
                 if console.CPU.carry {
                     console.CPU.carry = (console.CPU.A & 0x80) != 0;
                     console.CPU.A <<= 1;
@@ -428,7 +428,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             EOR!();
         }
         0x46 | 0x4A | 0x4E | 0x56 | 0x5E => { // LSR
-            if opcode & 0x0F == 0x8 {
+            if opcode == 0x4A {
                 console.CPU.carry = (console.CPU.A & 0x01) != 0;
                 console.CPU.A >>= 1;
                 console.CPU.negative = false;
@@ -468,7 +468,7 @@ pub fn interpret_opcode(console: &mut Console, opcode: u8) {
             ADC!();
         }
         0x66 | 0x6A | 0x6E | 0x76 | 0x7E => { // ROR
-            if opcode & 0x0F == 0x8  {
+            if opcode == 0x6A  {
                 if console.CPU.carry {
                     console.CPU.carry = (console.CPU.A & 0x01) != 0;
                     console.CPU.A = (console.CPU.A >> 1) + 0x80;

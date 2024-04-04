@@ -59,7 +59,7 @@ pub struct CPU {
 
 impl CPU {
     pub fn new() -> Self {
-        CPU { A: 0, X: 0, Y: 0, PC: 0xFFFF, SP: 0xFD, carry: false, zero: false, interupt_disable: true, decimal: false, break_cmd: false, overflow: false, negative: false, pause: 0, jump: false } 
+        CPU { A: 0x1E, X: 0, Y: 0, PC: 0xFFFF, SP: 0xFD, carry: false, zero: false, interupt_disable: true, decimal: false, break_cmd: false, overflow: false, negative: false, pause: 0, jump: false } 
     }
 }
 
@@ -203,24 +203,24 @@ fn InstructionToString(console: &mut Console, opcode: u8) -> String {
                     if aaa > 0b011 {
                         pc+1
                     } else if opcode == 0x20 {
-                        memory::read16(console, pc+1)
+                        memory::peek16(console, pc+1)
                     } else {
                         0
                     }
                 }
                 0b001 => { // zero page
-                    memory::read(console, pc+1) as u16
+                    memory::peek(console, pc+1) as u16
                 }
                 0b011 => { // absolute
                     if opcode == 0x6C {
-                        let temp = memory::read16(console, pc+1);
-                        memory::read16(console, temp)
+                        let temp = memory::peek16(console, pc+1);
+                        memory::peek16(console, temp)
                     } else {
-                        memory::read16(console, pc+1)
+                        memory::peek16(console, pc+1)
                     }
                 }
                 0b100 => {
-                    let num = memory::read(console, pc+1);
+                    let num = memory::peek(console, pc+1);
                     if (num & 0x80) != 0 {
                         (console.CPU.PC as i32 + (((!num) as i32)+1)*-1) as u16 + 2
                     } else {
@@ -228,10 +228,10 @@ fn InstructionToString(console: &mut Console, opcode: u8) -> String {
                     }
                 }
                 0b101 => { // zp indexed x
-                    ((memory::read(console, pc+1) + console.CPU.X) as u16) % 0xFF
+                    ((memory::peek(console, pc+1) + console.CPU.X) as u16) % 0xFF
                 }
                 0b111 => { // abs indexed x
-                    memory::read16(console, pc+1) + (console.CPU.X as u16)
+                    memory::peek16(console, pc+1) + (console.CPU.X as u16)
                 }
                 _ => {
                     0
@@ -241,31 +241,31 @@ fn InstructionToString(console: &mut Console, opcode: u8) -> String {
         0b01 => {
             match bbb {
                 0b000 => { // (zp,X)
-                    let temp = memory::read(console, pc+1);
-                    memory::read16(console, ( temp as u16 + console.CPU.X as u16)% 0xFF) as u16
+                    let temp = memory::peek(console, pc+1);
+                    memory::peek16(console, ( temp as u16 + console.CPU.X as u16)% 0xFF) as u16
                 }
                 0b001 => { // zp
-                    memory::read(console, pc+1) as u16
+                    memory::peek(console, pc+1) as u16
                 }
                 0b010 => { // immed
                     pc+1
                 }
                 0b011 => { // abs
-                    memory::read16(console, pc+1)
+                    memory::peek16(console, pc+1)
                 }
                 0b100 => { // (zp), Y
-                    let temp = memory::read(console, pc+1) as u16;
-                    memory::read16(console, temp) + console.CPU.Y as u16
+                    let temp = memory::peek(console, pc+1) as u16;
+                    memory::peek16(console, temp) + console.CPU.Y as u16
                 }
                 0b101 => { // zp,X
-                    (memory::read(console, pc+1) as u16 + console.CPU.X as u16) % 0xFF
+                    (memory::peek(console, pc+1) as u16 + console.CPU.X as u16) % 0xFF
                 }
                 0b110 => { // abs, Y
-                    let temp = memory::read16(console, pc+1);
+                    let temp = memory::peek16(console, pc+1);
                     temp + (console.CPU.Y as u16)
                 }
                 0b111 => { // abs, X
-                    let temp = memory::read16(console, pc+1);
+                    let temp = memory::peek16(console, pc+1);
                     temp + (console.CPU.X as u16)
                 }
                 _ => {
@@ -283,23 +283,23 @@ fn InstructionToString(console: &mut Console, opcode: u8) -> String {
                     }
                 }
                 0b001 => { // zp
-                    memory::read(console, pc+1) as u16
+                    memory::peek(console, pc+1) as u16
                 }
                 0b011 => { // abs
-                    memory::read16(console, pc+1)
+                    memory::peek16(console, pc+1)
                 }
                 0b101 => {
                     if opcode == 0x96 || opcode == 0xB6 {
-                        (memory::read(console, pc+1) as u16 + console.CPU.Y as u16) % 0xFF // zp, Y
+                        (memory::peek(console, pc+1) as u16 + console.CPU.Y as u16) % 0xFF // zp, Y
                     } else {
-                        (memory::read(console, pc+1) as u16 + console.CPU.X as u16) % 0xFF // zp, X
+                        (memory::peek(console, pc+1) as u16 + console.CPU.X as u16) % 0xFF // zp, X
                     }
                 }
                 0b111 => {
                     if opcode == 0x9E || opcode == 0xBE {
-                        memory::read16(console, pc+1) + (console.CPU.Y as u16)
+                        memory::peek16(console, pc+1) + (console.CPU.Y as u16)
                     } else {
-                        memory::read16(console, pc+1) + (console.CPU.X as u16)
+                        memory::peek16(console, pc+1) + (console.CPU.X as u16)
                     }
                 }
                 _ => {
@@ -311,14 +311,17 @@ fn InstructionToString(console: &mut Console, opcode: u8) -> String {
             panic!("unreachable")
         }
     };
-    if opcode & 0x0F == 0x8 {
+    if opcode & 0x0F == 0x8 || opcode & 0xF == 0xA || [0x00u8, 0x40u8, 0x60u8].contains(&opcode){
         return OPNAMES[opcode as usize].to_string()
+    }
+    if opcode & 0x0F == 0 {
+        return format!("{} #{:02X}",OPNAMES[opcode as usize], addr);
     }
     if addr != 0x4016 && (addr < 0x2000 || addr >= 0x6000){
         if addr < 0x100 {
-            format!("{} ${:02X} (#{:02X})",OPNAMES[opcode as usize], addr, memory::read(console, addr))
+            format!("{} ${:02X} (#{:02X})",OPNAMES[opcode as usize], addr, memory::peek(console, addr))
         } else {
-            format!("{} ${:04X} (#{:02X})",OPNAMES[opcode as usize], addr, memory::read(console, addr))
+            format!("{} ${:04X} (#{:02X})",OPNAMES[opcode as usize], addr, memory::peek(console, addr))
         }
     } else {
         if addr < 0x100 {
@@ -345,19 +348,19 @@ fn main() -> Result<(), Box<dyn Error>> {
         .opengl() // this line DOES NOT enable opengl, but allows you to create/get an OpenGL context from your window.
         .build()
         .unwrap();
-    let ntwindow = video_subsystem.window("Window", 512, 480)
-    .opengl() // this line DOES NOT enable opengl, but allows you to create/get an OpenGL context from your window.
-    .build()
-    .unwrap();
+    // let ntwindow = video_subsystem.window("Window", 512, 480)
+    // .opengl() // this line DOES NOT enable opengl, but allows you to create/get an OpenGL context from your window.
+    // .build()
+    // .unwrap();
 
     let mut canvas = window.into_canvas()
         .index(find_sdl_gl_driver().unwrap())
         .build()
         .unwrap();
-    let mut ntcanvas = ntwindow.into_canvas()
-    .index(find_sdl_gl_driver().unwrap())
-    .build()
-    .unwrap();
+    // let mut ntcanvas = ntwindow.into_canvas()
+    // .index(find_sdl_gl_driver().unwrap())
+    // .build()
+    // .unwrap();
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     canvas.set_scale(10.0, 10.0).unwrap();
@@ -370,11 +373,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     // let mut nttexture = ntcreator
     //    .create_texture_target(sdl2::pixels::PixelFormatEnum::RGB24, 256, 240).unwrap();
 
-    let dk = read_iNES("dk.nes".to_string()).expect("Read Error");
+    let dk = read_iNES("pong.nes".to_string()).expect("Read Error");
     let mut nes = Console::new(dk);
 
-    println!("Start Vector 0x{:x}", memory::read16(&mut nes, 0xFFFC));
-    nes.CPU.PC = memory::read16(&mut nes, 0xFFFC);
+    println!("Start Vector 0x{:x}", memory::peek16(&mut nes, 0xFFFC));
+    nes.CPU.PC = memory::peek16(&mut nes, 0xFFFC);
     
     let mut icount = 0;
     let mut calllevel = 0;
@@ -384,16 +387,21 @@ fn main() -> Result<(), Box<dyn Error>> {
     struct conditional_breakpoint {
         addr: u16,
         watch: u16,
-        val: u8
+        val: u8,
+        inverse: bool
     }
-
+    let mut step = false;
     let mut conditional_breakpoints: Vec<conditional_breakpoint> = Vec::<conditional_breakpoint>::new();
     'inputloop: loop {
         let mut input = String::new();
         stdin().read_line(&mut input)?;
         input = input.to_lowercase();
         match input.chars().next().unwrap() {
-            's' => break 'inputloop,
+            'r' => break 'inputloop,
+            's' => {
+                step = true;
+                break 'inputloop;
+            },
             'b' => {
                 let bp = u16::from_str_radix(&input[2..6], 16)?;
                 breakpoints.push(bp);
@@ -402,13 +410,13 @@ fn main() -> Result<(), Box<dyn Error>> {
                 let addr = u16::from_str_radix(&input[2..6], 16)?;
                 let watch = u16::from_str_radix(&input[7..11], 16)?;
                 let val = u8::from_str_radix(&input[12..14], 16)?;
-                conditional_breakpoints.push(conditional_breakpoint{addr, watch, val})
+                let inverse = input.chars().nth(15).unwrap() == '1';
+                conditional_breakpoints.push(conditional_breakpoint{addr, watch, val, inverse})
             },
             'q' => return Ok(()),
             _ => {}
         }
     }
-    let mut step = false;
     loop {
         let pc = nes.CPU.PC;
         let opcode = memory::read(&mut nes, pc);
@@ -419,15 +427,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             if nes.CPU.pause == 0 {
                 if nes.Strobe {
                     nes.Controller1.shiftreg = nes.Controller1.Buttons;
-                    println!("{:08b}", nes.Controller1.shiftreg);
+                    // println!("{:08b}", nes.Controller1.shiftreg);
                 }
                 //println!("{:04X}", memory::read16(&mut nes, 0xFFFA));
                 //println!("{:?}", nes.CPU);
                 let temp = InstructionToString(&mut nes, opcode);
-                println!("{} {:}{:}{:04X}: {}", icount, nes.CPU, " ".repeat(calllevel+1), pc, temp);
+                // println!("{} {:}{:}{:04X}: {}", icount, nes.CPU, " ".repeat(calllevel+1), pc, temp);
                 let mut do_break = false;
                 for x in &conditional_breakpoints {
-                    if x.addr == pc && memory::read(&mut nes, x.watch) == x.val {
+                    if x.addr == pc && ((memory::peek(&nes, x.watch) == x.val) ^ x.inverse) {
                         do_break = true;
                     }
                 }
@@ -438,10 +446,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                         stdin().read_line(&mut input)?;
                         match input.chars().next().unwrap() {
                             'p' => {
-                                if input.len() == 7 {
+                                if input.len() == 8 {
                                     let addr = u16::from_str_radix(&input[2..6], 16)?;
-                                    println!("${:04X}: {:02X}", addr, memory::read(&mut nes, addr));
-                                } else if input.len() == 12 {
+                                    println!("${:04X}: {:02X}", addr, memory::peek(&mut nes, addr));
+                                } else if input.len() == 13 {
                                     let addr_start = u16::from_str_radix(&input[2..6], 16)?;
                                     let addr_end = u16::from_str_radix(&input[7..11], 16)?;
                                     print!("${:04X}:", addr_start);
@@ -509,25 +517,30 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
 
         //if nes.cycles%4 == 0 {
-            ppu::stepPPU(&mut nes, &mut canvas, &mut texture, &mut ntcanvas);
+            ppu::stepPPU(&mut nes, &mut canvas, &mut texture);
             if nes.PPU.cycle == 0 && nes.PPU.scanline == 0 {
             //println!("[{}]", nes.PPU.scanline);
             }
         //}
         for event in event_pump.poll_iter() {
             match event {
-              Event::Quit { .. } => std::process::exit(0),
+              Event::Window{win_event: sdl2::event::WindowEvent::Close, ..} => return Ok(()), 
+              Event::Quit { .. } => return Ok(()),
               Event::KeyDown { keycode, .. }  => {
                 match keycode.unwrap() {
-                    Keycode::Escape => std::process::exit(0),
+                    Keycode::Escape => return Ok(()),
                     Keycode::Down => {
                         nes.Controller1.Buttons |= 0b00100000;
-                        println!("Controller = {:#08b}", nes.Controller1.Buttons);
+                        println!("Controller = {:#010b}", nes.Controller1.Buttons);
                     },
                     Keycode::Return => {
                         nes.Controller1.Buttons |= 0b00001000;
-                        println!("Controller = {:#08b}", nes.Controller1.Buttons);
+                        println!("Controller = {:#010b}", nes.Controller1.Buttons);
                     },
+                    Keycode::Z => {
+                        nes.Controller1.Buttons |= 0b00000001;
+                        println!("Controller = {:#010b}", nes.Controller1.Buttons);
+                    }
                     _ => {}
                 }
                 
@@ -536,11 +549,15 @@ fn main() -> Result<(), Box<dyn Error>> {
                 match keycode.unwrap() {
                     Keycode::Down => {
                         nes.Controller1.Buttons &= 0b11011111;
-                        println!("Controller = {:#08b}", nes.Controller1.Buttons);
+                        println!("Controller = {:#010b}", nes.Controller1.Buttons);
                     },
                     Keycode::Return => {
                         nes.Controller1.Buttons &= 0b11110111;
-                        println!("Controller = {:#08b}", nes.Controller1.Buttons);
+                        println!("Controller = {:#010b}", nes.Controller1.Buttons);
+                    },
+                    Keycode::Z => {
+                        nes.Controller1.Buttons &= 0b11111110;
+                        println!("Controller = {:#010b}", nes.Controller1.Buttons);
                     },
                     _ => {}
                 }

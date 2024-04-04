@@ -16,6 +16,38 @@ impl Memory {
     }
 }
 
+pub fn peek(console: &Console, index: u16) -> u8 {
+    match index {
+        index if index < 0x2000 => {
+            console.Memory.ram[(index%0x800) as usize]
+        }
+        index if index < 0x4000 => {
+            peekPPU(&console.PPU, (index%0x8 + 0x2000) as usize)
+        }
+        index if index == 0x4016 => {
+            let lsb = console.Controller1.shiftreg & 0x1;
+            lsb
+        }
+        index if index == 0x4017 => {
+            //println!("controlers unimplemented");
+            0
+        }
+        index if index < 0x4016 => {
+            readAPU(&console.APU, index)
+        }
+        index if index < 0x6000 => {
+            panic!("Unimplemented test I/O functionality");
+        }
+        index if (index >= 0x6000) => {
+            mapper::read(&console.Game, index)
+        }
+
+        _ => {
+            panic!("bad read addr: 0x{:x}", index);
+        }
+    }
+}
+
 pub fn read(console: &mut Console, index: u16) -> u8 {
         match index {
         index if index < 0x2000 => {
@@ -25,7 +57,7 @@ pub fn read(console: &mut Console, index: u16) -> u8 {
             readPPU(&mut console.PPU, (index%0x8 + 0x2000) as usize)
         }
         index if index == 0x4016 => {
-            println!("Controller read!");
+            // println!("Controller read!");
             let lsb = console.Controller1.shiftreg & 0x1;
             console.Controller1.shiftreg >>= 1;
             lsb
@@ -56,6 +88,12 @@ pub fn read16(console: &mut Console, index: u16) -> u16 {
     (hi<<8) | lo
 }
 
+pub fn peek16(console: &Console, index: u16) -> u16 {
+    let hi = peek(console, index+1) as u16;
+    let lo = peek(console, index) as u16;
+    (hi<<8) | lo
+}
+
 pub fn write(console: &mut Console, index: u16, data: u8) {
     
     #[cfg(debug_prints)]
@@ -67,7 +105,7 @@ pub fn write(console: &mut Console, index: u16, data: u8) {
         }
         index if index == 0x4016 => {
             console.Strobe = (data & 0x01) == 0x01;
-            println!("Strobe = {:0}", console.Strobe)
+            // println!("Strobe = {:0}", console.Strobe)
         }
         index if index == 0x4017 => {
             
@@ -96,7 +134,7 @@ pub fn write16(console: &mut Console, index: u16, data: u16) {
 }
 
 #[inline(always)]
-pub fn readPPUADDR(ppu: &mut PPU, index: usize) -> u8 {
+pub fn readPPUADDR(ppu: &PPU, index: usize) -> u8 {
     match index {
         index if index < 0x1000 => {
             ppu.patterntable0[index]
@@ -162,6 +200,23 @@ pub fn readPPU(ppu: &mut PPU, index: usize) -> u8 {
     }
 }
 
+pub fn peekPPU(ppu: &PPU, index: usize) -> u8 {
+    match index {
+        //index if index 
+        0x2002 => {
+            0u8 | ((ppu.vblank as u8) << 7) | ((ppu.s0_hit as u8) << 6) | ((ppu.sprite_overflow as u8) << 5)
+        }
+        0x2004 => {
+            ppu.oam[ppu.oamaddr]
+        }
+        0x2007 => {
+            readPPUADDR(ppu, index)
+        }
+        _ => {
+            panic!("bad PPU memory location: {:02X}", index);
+        }
+    }
+}
 
 
 #[inline(always)]
@@ -362,7 +417,7 @@ fn writeAPU(apu: &mut APU, index: u16, data: u8) {
             apu.Noise.length_counter_load = (data & 0b11111000) >> 3;
         }
         0x4010 => {
-            unimplemented!("DMC $4010");
+            // unimplemented!("DMC $4010");
         }
         0x4011 => {
             unimplemented!("DMC $4011");
